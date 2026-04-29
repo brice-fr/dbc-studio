@@ -4,8 +4,11 @@
   import SignalTable from '$lib/components/SignalTable.svelte';
   import PropertiesPanel from '$lib/components/PropertiesPanel.svelte';
   import ToastContainer from '$lib/components/ToastContainer.svelte';
+  import ValidationPanel from '$lib/components/ValidationPanel.svelte';
   import { treePanelWidth, propertiesPanelWidth } from '$lib/stores/ui';
   import { isDirty, currentFilePath } from '$lib/stores/dbc';
+
+  let validationPanel: ValidationPanel;
 
   // Update window title
   $: document.title = `DBC Studio${$currentFilePath ? ' — ' + $currentFilePath.split('/').pop() : ''}${$isDirty ? ' ●' : ''}`;
@@ -32,7 +35,7 @@
 <svelte:window on:mousemove={onMouseMove} on:mouseup={stopDrag} />
 
 <div class="app-shell">
-  <Toolbar />
+  <Toolbar on:validate={() => validationPanel?.runValidation()} />
   <div class="workspace">
     <div class="tree-pane" style="width:{$treePanelWidth}px; min-width:{$treePanelWidth}px;">
       <TreePanel />
@@ -46,6 +49,7 @@
       <PropertiesPanel />
     </div>
   </div>
+  <ValidationPanel bind:this={validationPanel} />
 </div>
 
 <ToastContainer />

@@ -1,8 +1,11 @@
 <script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import { dbcStore, isDirty, currentFilePath, markClean } from '../stores/dbc';
-  import { showToast, hexMode } from '../stores/ui';
+  import { showToast, hexMode, showValidationPanel } from '../stores/ui';
   import { pickOpenFile, pickSaveFile, openDbc, saveDbc } from '../api';
   import { emptyModel, newMessage } from '../types';
+
+  const dispatch = createEventDispatcher();
 
   let saving = false;
   let opening = false;
@@ -38,6 +41,8 @@
       await saveDbc(path, $dbcStore);
       markClean(path);
       showToast('success', 'Saved');
+      // Auto-validate after every save
+      dispatch('validate');
     } catch (e) {
       showToast('error', String(e));
     } finally {
@@ -124,6 +129,15 @@
   <div class="group">
     <button class="btn btn-primary" on:click={handleAddMessage} title="Add Message">
       + Message
+    </button>
+  </div>
+
+  <div class="separator"></div>
+
+  <!-- Validate -->
+  <div class="group">
+    <button class="btn" on:click={() => dispatch('validate')} title="Run validation checks">
+      ✓ Validate
     </button>
   </div>
 
