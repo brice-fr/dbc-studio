@@ -43,3 +43,8 @@ export function showToast(type: Toast['type'], message: string, durationMs = 300
 
 export const treePanelWidth = writable(260);
 export const propertiesPanelWidth = writable(280);
+
+// ─── Display mode ─────────────────────────────────────────────────────────────
+
+/** When true, CAN IDs are shown in hex (0x1A2); when false, in decimal (418). */
+export const hexMode = writable<boolean>(true);

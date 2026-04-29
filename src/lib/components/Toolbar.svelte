@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dbcStore, isDirty, currentFilePath, markClean } from '../stores/dbc';
-  import { showToast } from '../stores/ui';
+  import { showToast, hexMode } from '../stores/ui';
   import { pickOpenFile, pickSaveFile, openDbc, saveDbc } from '../api';
   import { emptyModel, newMessage } from '../types';
 
@@ -127,6 +127,24 @@
     </button>
   </div>
 
+  <div class="separator"></div>
+
+  <!-- Display mode toggle -->
+  <div class="group">
+    <button
+      class="btn btn-toggle"
+      class:active={$hexMode}
+      on:click={() => hexMode.set(true)}
+      title="Show IDs in hexadecimal"
+    >HEX</button>
+    <button
+      class="btn btn-toggle"
+      class:active={!$hexMode}
+      on:click={() => hexMode.set(false)}
+      title="Show IDs in decimal"
+    >DEC</button>
+  </div>
+
   <!-- File path breadcrumb -->
   <div class="path">
     {#if $currentFilePath}
@@ -164,6 +182,20 @@
   .btn:hover { background: var(--bg-hover); border-color: var(--border); }
   .btn:disabled { opacity: 0.5; cursor: default; }
   .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-hover); border-color: transparent; }
+  .btn-toggle {
+    padding: 3px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--border);
+    border-radius: 0;
+    color: var(--text-muted);
+  }
+  .btn-toggle:first-of-type { border-radius: 4px 0 0 4px; }
+  .btn-toggle:last-of-type  { border-radius: 0 4px 4px 0; border-left: none; }
+  .btn-toggle.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-toggle:hover:not(.active) { background: var(--bg-hover); }
   .btn-primary:hover { background: var(--accent-hover); border-color: transparent; }
   .path {
     margin-left: auto;

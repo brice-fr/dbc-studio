@@ -1,6 +1,6 @@
 <script lang="ts">
   import { dbcStore } from '../stores/dbc';
-  import { selectedMessageId, selectedSignalName, selectMessage, selectSignal, showToast } from '../stores/ui';
+  import { selectedMessageId, selectedSignalName, selectMessage, selectSignal, showToast, hexMode } from '../stores/ui';
   import { newSignal, formatCanId } from '../types';
   import type { MessageModel } from '../types';
 
@@ -84,7 +84,7 @@
 
         <span class="msg-icon">✉</span>
         <span class="msg-name">{msg.name}</span>
-        <span class="msg-id">{formatCanId(msg)}</span>
+        <span class="msg-id">{formatCanId(msg, $hexMode)}</span>
         <span class="msg-dlc">[{msg.dlc}]</span>
 
         <!-- Context actions -->

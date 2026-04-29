@@ -52,6 +52,7 @@ pub fn default_signal(args: NewSignalArgs) -> SignalModel {
         is_multiplexer: false,
         multiplexer_switch_value: None,
         comment: None,
+        value_descriptions: vec![],
     }
 }
 

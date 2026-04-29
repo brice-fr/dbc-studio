@@ -21,6 +21,12 @@ export interface MessageModel {
   comment: string | null;
 }
 
+/** A single VAL_ entry: numeric value → symbolic label. */
+export interface ValueDescriptionModel {
+  value: number;
+  label: string;
+}
+
 export interface SignalModel {
   name: string;
   start_bit: number;
@@ -37,6 +43,8 @@ export interface SignalModel {
   is_multiplexer: boolean;
   multiplexer_switch_value: number | null;
   comment: string | null;
+  /** Symbolic value descriptions (VAL_ entries). */
+  value_descriptions: ValueDescriptionModel[];
 }
 
 export interface ValidationIssue {
@@ -46,18 +54,12 @@ export interface ValidationIssue {
   signal_name: string | null;
 }
 
-// UI-level selection state
-export interface Selection {
-  messageId: number | null;
-  signalName: string | null;
-}
+// ─── Factories ────────────────────────────────────────────────────────────────
 
-// Empty model factory
 export function emptyModel(): DbcModel {
   return { version: '', nodes: [], messages: [] };
 }
 
-// Default message factory (client-side, matches Rust default_message)
 export function newMessage(id: number): MessageModel {
   return {
     id,
@@ -70,7 +72,6 @@ export function newMessage(id: number): MessageModel {
   };
 }
 
-// Default signal factory (client-side)
 export function newSignal(): SignalModel {
   return {
     name: 'NewSignal',
@@ -87,11 +88,31 @@ export function newSignal(): SignalModel {
     is_multiplexer: false,
     multiplexer_switch_value: null,
     comment: null,
+    value_descriptions: [],
   };
 }
 
-/** Format a CAN ID as hex string, showing the raw ID (with extended bit mask). */
-export function formatCanId(msg: MessageModel): string {
-  const displayId = msg.is_extended ? msg.id & 0x1fffffff : msg.id;
-  return `0x${displayId.toString(16).toUpperCase().padStart(msg.is_extended ? 8 : 3, '0')}`;
+// ─── ID formatting ────────────────────────────────────────────────────────────
+
+/** Raw display ID (strips extended flag bit). */
+export function rawDisplayId(msg: MessageModel): number {
+  return msg.is_extended ? msg.id & 0x1fffffff : msg.id;
+}
+
+/** Format a CAN ID respecting the global hex/dec mode. */
+export function formatCanId(msg: MessageModel, hex: boolean): string {
+  const id = rawDisplayId(msg);
+  if (hex) {
+    return `0x${id.toString(16).toUpperCase().padStart(msg.is_extended ? 8 : 3, '0')}`;
+  }
+  return id.toString(10);
+}
+
+/** Format a plain numeric ID (no MessageModel needed). */
+export function formatId(id: number, isExtended: boolean, hex: boolean): string {
+  const display = isExtended ? id & 0x1fffffff : id;
+  if (hex) {
+    return `0x${display.toString(16).toUpperCase().padStart(isExtended ? 8 : 3, '0')}`;
+  }
+  return display.toString(10);
 }

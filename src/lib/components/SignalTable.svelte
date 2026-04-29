@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dbcStore } from '../stores/dbc';
-  import { selectedMessageId, selectedSignalName, selectSignal } from '../stores/ui';
-  import { newSignal } from '../types';
+  import { selectedMessageId, selectedSignalName, selectSignal, hexMode } from '../stores/ui';
+  import { newSignal, formatId } from '../types';
   import type { SignalModel } from '../types';
 
   // Derived: current message
@@ -100,7 +100,7 @@
     <div class="table-header-bar">
       <span class="msg-title">
         {selectedMsg.name}
-        <span class="msg-id-badge">ID: 0x{(selectedMsg.is_extended ? selectedMsg.id & 0x1fffffff : selectedMsg.id).toString(16).toUpperCase()}</span>
+        <span class="msg-id-badge">ID: {formatId(selectedMsg.id, selectedMsg.is_extended, $hexMode)}</span>
         <span class="msg-dlc-badge">DLC: {selectedMsg.dlc}</span>
         <span class="msg-sender-badge">TX: {selectedMsg.sender || '—'}</span>
       </span>

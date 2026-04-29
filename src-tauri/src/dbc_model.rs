@@ -47,6 +47,13 @@ impl MessageModel {
     }
 }
 
+/// A single VAL_ entry: maps a numeric value to a symbolic label.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ValueDescriptionModel {
+    pub value: u64,
+    pub label: String,
+}
+
 /// A CAN signal (SG_ entry).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SignalModel {
@@ -68,6 +75,8 @@ pub struct SignalModel {
     /// Switch value for a multiplexed signal (m<N>), None for normal signals.
     pub multiplexer_switch_value: Option<u64>,
     pub comment: Option<String>,
+    /// Symbolic value descriptions (VAL_ entries).
+    pub value_descriptions: Vec<ValueDescriptionModel>,
 }
 
 /// A validation issue found in the model.
@@ -95,50 +104,61 @@ impl From<&dbc_rs::Dbc> for DbcModel {
             })
             .collect();
 
-        let messages = dbc.messages().iter().map(MessageModel::from).collect();
+        // Build messages, passing dbc for value-description lookup
+        let messages = dbc
+            .messages()
+            .iter()
+            .map(|msg| message_model_from(msg, dbc))
+            .collect();
 
         DbcModel { version, nodes, messages }
     }
 }
 
-impl From<&dbc_rs::Message> for MessageModel {
-    fn from(msg: &dbc_rs::Message) -> Self {
-        MessageModel {
-            id: msg.id(),
-            is_extended: msg.is_extended(),
-            name: msg.name().to_string(),
-            dlc: msg.dlc(),
-            sender: msg.sender().to_string(),
-            signals: msg.signals().iter().map(SignalModel::from).collect(),
-            comment: msg.comment().map(str::to_string),
-        }
+fn message_model_from(msg: &dbc_rs::Message, dbc: &dbc_rs::Dbc) -> MessageModel {
+    MessageModel {
+        id: msg.id(),
+        is_extended: msg.is_extended(),
+        name: msg.name().to_string(),
+        dlc: msg.dlc(),
+        sender: msg.sender().to_string(),
+        signals: msg.signals().iter().map(|s| signal_model_from(s, msg.id(), dbc)).collect(),
+        comment: msg.comment().map(str::to_string),
     }
 }
 
-impl From<&dbc_rs::Signal> for SignalModel {
-    fn from(sig: &dbc_rs::Signal) -> Self {
-        let byte_order = match sig.byte_order() {
-            dbc_rs::ByteOrder::LittleEndian => "LittleEndian",
-            dbc_rs::ByteOrder::BigEndian => "BigEndian",
-        }
-        .to_string();
+fn signal_model_from(sig: &dbc_rs::Signal, msg_id: u32, dbc: &dbc_rs::Dbc) -> SignalModel {
+    let byte_order = match sig.byte_order() {
+        dbc_rs::ByteOrder::LittleEndian => "LittleEndian",
+        dbc_rs::ByteOrder::BigEndian => "BigEndian",
+    }
+    .to_string();
 
-        SignalModel {
-            name: sig.name().to_string(),
-            start_bit: sig.start_bit(),
-            length: sig.length(),
-            byte_order,
-            is_unsigned: sig.is_unsigned(),
-            factor: sig.factor(),
-            offset: sig.offset(),
-            min: sig.min(),
-            max: sig.max(),
-            unit: sig.unit().map(str::to_string),
-            receivers: sig.receivers().iter().map(str::to_string).collect(),
-            is_multiplexer: sig.is_multiplexer_switch(),
-            multiplexer_switch_value: sig.multiplexer_switch_value(),
-            comment: sig.comment().map(str::to_string),
-        }
+    let value_descriptions = dbc
+        .value_descriptions_for_signal(msg_id, sig.name())
+        .map(|vd| {
+            vd.iter()
+                .map(|(v, l)| ValueDescriptionModel { value: v, label: l.to_string() })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    SignalModel {
+        name: sig.name().to_string(),
+        start_bit: sig.start_bit(),
+        length: sig.length(),
+        byte_order,
+        is_unsigned: sig.is_unsigned(),
+        factor: sig.factor(),
+        offset: sig.offset(),
+        min: sig.min(),
+        max: sig.max(),
+        unit: sig.unit().map(str::to_string),
+        receivers: sig.receivers().iter().map(str::to_string).collect(),
+        is_multiplexer: sig.is_multiplexer_switch(),
+        multiplexer_switch_value: sig.multiplexer_switch_value(),
+        comment: sig.comment().map(str::to_string),
+        value_descriptions,
     }
 }
 
@@ -163,7 +183,7 @@ impl TryFrom<&DbcModel> for dbc_rs::Dbc {
         let mut dbc_builder =
             dbc_rs::DbcBuilder::new().version(version_builder).nodes(nodes_builder);
 
-        // Messages & signals
+        // Messages, signals, and value descriptions
         for msg in &model.messages {
             let mut msg_builder = dbc_rs::MessageBuilder::new()
                 .id(msg.id)
@@ -211,6 +231,16 @@ impl TryFrom<&DbcModel> for dbc_rs::Dbc {
                 }
 
                 msg_builder = msg_builder.add_signal(sig_builder);
+
+                // VAL_ entries for this signal
+                if !sig.value_descriptions.is_empty() {
+                    let mut vd_builder = dbc_rs::ValueDescriptionsBuilder::new();
+                    for vd in &sig.value_descriptions {
+                        vd_builder = vd_builder.add_entry(vd.value, vd.label.as_str());
+                    }
+                    dbc_builder =
+                        dbc_builder.add_value_description(msg.id, sig.name.as_str(), vd_builder);
+                }
             }
 
             dbc_builder = dbc_builder.add_message(msg_builder);

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { dbcStore } from '../stores/dbc';
-  import { selectedMessageId, selectedSignalName } from '../stores/ui';
-  import type { MessageModel, SignalModel } from '../types';
+  import { selectedMessageId, selectedSignalName, hexMode } from '../stores/ui';
+  import type { MessageModel, SignalModel, ValueDescriptionModel } from '../types';
 
   $: selectedMsg = $dbcStore.messages.find((m) => m.id === $selectedMessageId) ?? null;
   $: selectedSig = selectedMsg?.signals.find((s) => s.name === $selectedSignalName) ?? null;
@@ -55,6 +55,7 @@
   let sigComment = '';
   let sigIsMux = false;
   let sigMuxValue = '';
+  let sigValueDescs: ValueDescriptionModel[] = [];
 
   $: if (selectedSig) {
     sigName = selectedSig.name;
@@ -71,6 +72,7 @@
     sigComment = selectedSig.comment ?? '';
     sigIsMux = selectedSig.is_multiplexer;
     sigMuxValue = selectedSig.multiplexer_switch_value?.toString() ?? '';
+    sigValueDescs = selectedSig.value_descriptions.map((vd) => ({ ...vd }));
   }
 
   function applySigChanges() {
@@ -90,11 +92,36 @@
       comment: sigComment || null,
       is_multiplexer: sigIsMux,
       multiplexer_switch_value: sigMuxValue !== '' ? parseInt(sigMuxValue) : null,
+      value_descriptions: sigValueDescs.filter((vd) => vd.label.trim() !== ''),
     };
     dbcStore.updateSignal(selectedMsg.id, selectedSig.name, patch);
     if (sigName !== selectedSig.name) {
       selectedSignalName.set(sigName);
     }
+  }
+
+  // ─── Value descriptions helpers ───────────────────────────────────────────
+  function addValueDesc() {
+    // Find the next unused integer value
+    const usedVals = new Set(sigValueDescs.map((v) => v.value));
+    let next = 0;
+    while (usedVals.has(next)) next++;
+    sigValueDescs = [...sigValueDescs, { value: next, label: '' }];
+  }
+
+  function removeValueDesc(idx: number) {
+    sigValueDescs = sigValueDescs.filter((_, i) => i !== idx);
+  }
+
+  function updateValueDescValue(idx: number, raw: string) {
+    const n = parseInt(raw);
+    if (!isNaN(n)) {
+      sigValueDescs = sigValueDescs.map((vd, i) => i === idx ? { ...vd, value: n } : vd);
+    }
+  }
+
+  function updateValueDescLabel(idx: number, label: string) {
+    sigValueDescs = sigValueDescs.map((vd, i) => i === idx ? { ...vd, label } : vd);
   }
 
   // Physical value preview
@@ -143,6 +170,63 @@
         <div class="phys-preview">
           Physical: [{physMin.toPrecision(4)} … {physMax.toPrecision(4)}] {sigUnit}
         </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Value Descriptions (VAL_)</legend>
+        {#if sigValueDescs.length > 0}
+          <div class="val-table">
+            <div class="val-row val-header">
+              <span class="val-cell-value">Value ({$hexMode ? 'hex' : 'dec'})</span>
+              <span class="val-cell-label">Label</span>
+              <span class="val-cell-del"></span>
+            </div>
+            {#each sigValueDescs as vd, idx (idx)}
+              <div class="val-row">
+                <div class="val-cell-value">
+                  {#if $hexMode}
+                    <span class="hex-prefix-sm">0x</span>
+                    <input
+                      class="val-input val-input-value mono"
+                      type="text"
+                      value={vd.value.toString(16).toUpperCase()}
+                      on:change={(e) => updateValueDescValue(idx, '0x' + e.currentTarget.value)}
+                      placeholder="0"
+                    />
+                  {:else}
+                    <input
+                      class="val-input val-input-value mono"
+                      type="number"
+                      value={vd.value}
+                      on:change={(e) => updateValueDescValue(idx, e.currentTarget.value)}
+                      min="0"
+                    />
+                  {/if}
+                </div>
+                <div class="val-cell-label">
+                  <input
+                    class="val-input"
+                    type="text"
+                    value={vd.label}
+                    on:input={(e) => updateValueDescLabel(idx, e.currentTarget.value)}
+                    placeholder="Label"
+                  />
+                </div>
+                <div class="val-cell-del">
+                  <button
+                    type="button"
+                    class="val-del-btn"
+                    title="Remove"
+                    on:click={() => removeValueDesc(idx)}
+                  >✕</button>
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="val-empty">No value descriptions. Add one below.</div>
+        {/if}
+        <button type="button" class="val-add-btn" on:click={addValueDesc}>+ Add Value</button>
       </fieldset>
 
       <fieldset>
@@ -286,6 +370,75 @@
     padding: 3px 6px;
     font-family: monospace;
   }
+  /* Value descriptions table */
+  .val-table {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .val-row {
+    display: grid;
+    grid-template-columns: 90px 1fr 22px;
+    gap: 4px;
+    align-items: center;
+  }
+  .val-header {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding-bottom: 2px;
+    border-bottom: 1px solid var(--border-light);
+    margin-bottom: 2px;
+  }
+  .val-cell-value { display: flex; align-items: center; gap: 2px; }
+  .val-cell-label { display: flex; align-items: center; }
+  .val-cell-del { display: flex; align-items: center; justify-content: center; }
+  .val-input {
+    width: 100%;
+    font-size: 11px;
+    padding: 3px 5px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    background: var(--bg-input);
+    color: var(--text);
+    outline: none;
+    box-sizing: border-box;
+  }
+  .val-input:focus { border-color: var(--accent); }
+  .val-input-value { font-family: monospace; }
+  .mono { font-family: monospace; }
+  .hex-prefix-sm {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-family: monospace;
+    flex-shrink: 0;
+  }
+  .val-del-btn {
+    background: none; border: none; cursor: pointer;
+    padding: 2px 3px; font-size: 10px; color: var(--text-muted);
+    border-radius: 3px;
+  }
+  .val-del-btn:hover { background: #e53e3e20; color: #e53e3e; }
+  .val-empty {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+    padding: 2px 0;
+  }
+  .val-add-btn {
+    align-self: flex-start;
+    font-size: 11px;
+    padding: 3px 8px;
+    background: var(--bg-badge);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 2px;
+  }
+  .val-add-btn:hover { background: var(--bg-hover); color: var(--text); }
   .apply-btn {
     margin-top: 4px;
     padding: 6px 12px;
