@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- App background: deep navy gradient -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0c1a35"/>
+      <stop offset="100%" stop-color="#060e1c"/>
+    </linearGradient>
+
+    <!-- Oscilloscope screen: slightly lighter, top-to-bottom -->
+    <linearGradient id="screen" x1="0" y1="88" x2="0" y2="936" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#0d2040"/>
+      <stop offset="100%" stop-color="#07121e"/>
+    </linearGradient>
+
+    <!-- Glow: blur behind the signal line then merge with original -->
+    <filter id="glow" x="-8%" y="-8%" width="116%" height="116%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="9" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ── App icon background ───────────────────────────────────────────── -->
+  <!-- rx=200 gives rounded corners in contexts that don't apply an OS mask -->
+  <rect width="1024" height="1024" rx="200" fill="url(#bg)"/>
+
+  <!-- ── Oscilloscope screen ──────────────────────────────────────────── -->
+  <rect x="80" y="88" width="864" height="848" rx="28" fill="url(#screen)"/>
+  <!-- Subtle bezel border -->
+  <rect x="80" y="88" width="864" height="848" rx="28" fill="none"
+        stroke="#1b3d72" stroke-width="3"/>
+
+  <!-- ── Grid ─────────────────────────────────────────────────────────── -->
+  <!-- Lane dividers (slightly visible) -->
+  <line x1="104" y1="378" x2="920" y2="378" stroke="#132340" stroke-width="2.5"/>
+  <line x1="104" y1="646" x2="920" y2="646" stroke="#132340" stroke-width="2.5"/>
+  <!-- Faint midpoint horizontals -->
+  <line x1="104" y1="244" x2="920" y2="244" stroke="#0d1c30" stroke-width="1.5"/>
+  <line x1="104" y1="512" x2="920" y2="512" stroke="#0d1c30" stroke-width="1.5"/>
+  <line x1="104" y1="778" x2="920" y2="778" stroke="#0d1c30" stroke-width="1.5"/>
+  <!-- Faint vertical grid lines -->
+  <line x1="308" y1="112" x2="308" y2="912" stroke="#0d1c30" stroke-width="1.5"/>
+  <line x1="512" y1="112" x2="512" y2="912" stroke="#0d1c30" stroke-width="1.5"/>
+  <line x1="716" y1="112" x2="716" y2="912" stroke="#0d1c30" stroke-width="1.5"/>
+
+  <!-- ── Signal traces ─────────────────────────────────────────────────── -->
+  <!--
+    Three lanes (content area y=112–912, height=800, each lane=266 px):
+      Lane 1: 112–378   LOW y=320  HIGH y=168
+      Lane 2: 378–646   LOW y=588  HIGH y=436
+      Lane 3: 646–912   LOW y=854  HIGH y=704
+
+    Pulse positions staggered for visual variety:
+      Trace 1: one wide centred pulse  (280→600)
+      Trace 2: two shorter pulses      (180→410) and (570→800)
+      Trace 3: one pulse shifted right (430→710)
+
+    stroke-linecap="butt" + stroke-linejoin="miter" → crisp 90° corners
+  -->
+
+  <!-- Trace 1 — sky blue, single central pulse -->
+  <path d="M 104 320 H 280 V 168 H 600 V 320 H 920"
+        fill="none" stroke="#7dd3fc" stroke-width="16"
+        stroke-linecap="butt" stroke-linejoin="miter"
+        filter="url(#glow)"/>
+
+  <!-- Trace 2 — vivid blue, two pulses (suggests bit data) -->
+  <path d="M 104 588 H 180 V 436 H 410 V 588 H 570 V 436 H 800 V 588 H 920"
+        fill="none" stroke="#3b82f6" stroke-width="16"
+        stroke-linecap="butt" stroke-linejoin="miter"
+        filter="url(#glow)"/>
+
+  <!-- Trace 3 — deeper blue, single pulse offset right -->
+  <path d="M 104 854 H 430 V 704 H 710 V 854 H 920"
+        fill="none" stroke="#1d4ed8" stroke-width="16"
+        stroke-linecap="butt" stroke-linejoin="miter"
+        filter="url(#glow)"/>
+</svg>
