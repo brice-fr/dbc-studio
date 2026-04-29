@@ -24,6 +24,14 @@ recompilation on file changes.
 source $HOME/.cargo/env && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && npm run tauri dev
 ```
 
+> **Note — app icon in dev builds:** macOS caches application icons aggressively.
+> The custom icon only appears reliably after a full release build (`npm run tauri build`).
+> To force the dev-mode icon to refresh without a full build, flush the icon cache:
+>
+> ```bash
+> sudo find /private/var/folders -name "com.apple.dock.iconcache" -exec rm -rf {} + 2>/dev/null; killall Dock
+> ```
+
 ---
 
 ## 2 · Type-check (frontend + Svelte)
