@@ -14,15 +14,22 @@
   let msgComment = '';
   let msgExtended = false;
 
-  // Re-sync whenever the selected message OR the display mode changes
+  // Sync all non-ID fields when the message selection changes.
+  // Intentionally does NOT reference $hexMode — so toggling hex/dec
+  // does not reset fields the user has already edited but not yet applied.
+  $: if (selectedMsg && !selectedSig) {
+    msgName     = selectedMsg.name;
+    msgDlc      = selectedMsg.dlc;
+    msgSender   = selectedMsg.sender;
+    msgComment  = selectedMsg.comment ?? '';
+    msgExtended = selectedMsg.is_extended;
+  }
+
+  // Reformat the ID field only — depends on both the message and the display
+  // mode, so it re-runs on either change without touching other fields.
   $: if (selectedMsg && !selectedSig) {
     const rawId = selectedMsg.is_extended ? selectedMsg.id & 0x1fffffff : selectedMsg.id;
     msgId = $hexMode ? rawId.toString(16).toUpperCase() : rawId.toString(10);
-    msgName = selectedMsg.name;
-    msgDlc = selectedMsg.dlc;
-    msgSender = selectedMsg.sender;
-    msgComment = selectedMsg.comment ?? '';
-    msgExtended = selectedMsg.is_extended;
   }
 
   function applyMsgChanges() {
