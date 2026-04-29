@@ -1,107 +1,130 @@
 # DBC Studio — Developer Cheatsheet
 
-## Prerequisites
+All commands are written as single copy-paste lines that source the required toolchains
+(`cargo`, `nvm`) inline, so they work from any shell session without a separate setup step.
+
+---
+
+## 0 · Shell setup (one-time per terminal, optional)
+
+If you prefer to source toolchains once rather than inline, paste this block first:
 
 ```bash
-# Load Rust toolchain
-source $HOME/.cargo/env
-
-# Load Node.js via nvm
-export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+source $HOME/.cargo/env && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 ```
 
 ---
 
-## Daily Dev Commands
+## 1 · Development build (hot-reload)
+
+Launches the full Tauri dev window with Vite hot-reload for the UI and automatic Rust
+recompilation on file changes.
 
 ```bash
-# Start full dev environment (hot-reload UI + Rust rebuild on change)
-npm run tauri dev
-
-# Frontend only (browser, no Tauri)
-npm run dev
-
-# Type-check frontend
-npm run check
-
-# Watch type-check
-npm run check:watch
+source $HOME/.cargo/env && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && npm run tauri dev
 ```
 
 ---
 
-## Rust Backend
+## 2 · Type-check (frontend + Svelte)
+
+Runs `svelte-check` against the full TypeScript config. Exits non-zero on any error.
 
 ```bash
-# Check Rust code only (fast, no linking)
-source $HOME/.cargo/env && cd src-tauri && cargo check
-
-# Build release binary
-source $HOME/.cargo/env && cd src-tauri && cargo build --release
-
-# Run Rust tests
-source $HOME/.cargo/env && cd src-tauri && cargo test
-
-# Add a Rust dependency
-source $HOME/.cargo/env && cd src-tauri && cargo add <crate-name>
-
-# Update Rust dependencies
-source $HOME/.cargo/env && cd src-tauri && cargo update
-
-# Check for outdated Rust deps
-source $HOME/.cargo/env && cd src-tauri && cargo outdated
+export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && npm run check
 ```
 
 ---
 
-## Frontend
+## 3 · Type-check (Rust only)
+
+Fast Rust analysis without linking — catches type errors and borrow issues in seconds.
 
 ```bash
-# Install npm dependencies
-npm install
-
-# Add a frontend package
-npm install <package-name>
-
-# Add a dev-only package
-npm install --save-dev <package-name>
-
-# Update npm packages
-npm update
-
-# Format code (if prettier configured)
-npx prettier --write src/
+source $HOME/.cargo/env && cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
 ---
 
-## Building for Distribution
+## 4 · Local release build (current platform)
+
+Compiles an optimized binary and produces a native installer under
+`src-tauri/target/release/bundle/`.
 
 ```bash
-# Build for current platform (produces installers in src-tauri/target/release/bundle/)
-npm run tauri build
+source $HOME/.cargo/env && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && npm run tauri build
+```
 
-# Build without bundling (raw binary only)
-npm run tauri build -- --no-bundle
+macOS universal binary (arm64 + x86_64):
 
-# macOS universal binary (arm64 + x86_64)
-npm run tauri build -- --target universal-apple-darwin
+```bash
+source $HOME/.cargo/env && export NVM_DIR="$HOME/.nvm" && [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" && npm run tauri build -- --target universal-apple-darwin
 ```
 
 ---
 
-## Tauri Plugin Management
+## 5 · Version bump
+
+Replace `NEW_VER` with the new semver string (e.g. `0.2.0`). Updates all three version
+fields that Tauri requires to agree: `package.json`, `src-tauri/Cargo.toml`, and
+`src-tauri/tauri.conf.json`.
 
 ```bash
-# Add a Tauri plugin (Rust side)
-source $HOME/.cargo/env && cd src-tauri && cargo add tauri-plugin-<name>@2
+NEW_VER="0.2.0" && \
+  node -e "const f='package.json',j=JSON.parse(require('fs').readFileSync(f));j.version='$NEW_VER';require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')" && \
+  sed -i '' "s/^version = \".*\"/version = \"$NEW_VER\"/" src-tauri/Cargo.toml && \
+  node -e "const f='src-tauri/tauri.conf.json',j=JSON.parse(require('fs').readFileSync(f));j.version='$NEW_VER';require('fs').writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
+```
 
-# Add the JS bindings
-npm install @tauri-apps/plugin-<name>
+Verify the three files updated correctly:
 
-# Then register in src-tauri/src/lib.rs:
-# .plugin(tauri_plugin_<name>::init())
-# And add permissions in src-tauri/capabilities/default.json
+```bash
+grep '"version"' package.json src-tauri/tauri.conf.json && grep '^version' src-tauri/Cargo.toml
+```
+
+---
+
+## 6 · Stage and commit
+
+Replace the commit message as needed. Uses the project's conventional-commit style.
+
+```bash
+git add -p && git commit -m "feat: describe your change here"
+```
+
+Stage everything (tracked files only) in one go:
+
+```bash
+git add -u && git commit -m "feat: describe your change here"
+```
+
+---
+
+## 7 · Push to remote
+
+```bash
+git push origin main
+```
+
+---
+
+## 8 · Tag, push tag, and draft GitHub release
+
+Replace `v0.2.0` with the actual version. Creates an annotated tag locally, pushes it,
+then opens a draft GitHub release pre-filled with that tag so you can write release notes
+in the browser before publishing.
+
+```bash
+VER="v0.2.0" && \
+  git tag -a "$VER" -m "Release $VER" && \
+  git push origin "$VER" && \
+  gh release create "$VER" --draft --title "DBC Studio $VER" --notes "## What's new\n\n- " --web
+```
+
+List existing tags and releases:
+
+```bash
+git tag --sort=-creatordate | head -10 && gh release list
 ```
 
 ---
@@ -113,12 +136,12 @@ npm install @tauri-apps/plugin-<name>
 | `src/routes/+page.svelte` | Main app shell |
 | `src/lib/components/` | Svelte components |
 | `src/lib/stores/dbc.ts` | DBC model store + undo/redo |
-| `src/lib/stores/ui.ts` | UI state (selection, toasts) |
-| `src/lib/api.ts` | Tauri invoke() wrappers |
+| `src/lib/stores/ui.ts` | UI state (selection, toasts, hexMode) |
+| `src/lib/api.ts` | Tauri `invoke()` wrappers |
 | `src/lib/types.ts` | TypeScript types (mirrors Rust) |
-| `src-tauri/src/dbc_model.rs` | Rust serde types |
+| `src-tauri/src/dbc_model.rs` | Rust serde types + dbc-rs conversions |
 | `src-tauri/src/commands/` | Tauri command handlers |
-| `src-tauri/tauri.conf.json` | App config (window size, name, ID) |
+| `src-tauri/tauri.conf.json` | App config, version, window size |
 | `src-tauri/capabilities/default.json` | Tauri permissions |
 | `src-tauri/Cargo.toml` | Rust dependencies |
 
@@ -141,27 +164,6 @@ npm install @tauri-apps/plugin-<name>
      return invoke<string>('my_command', { arg });
    }
    ```
-
----
-
-## GitHub
-
-```bash
-# Push to main
-git push origin main
-
-# Create a release tag
-git tag v0.1.0 && git push origin v0.1.0
-
-# View repo
-gh repo view --web
-
-# Create a PR
-gh pr create --title "feat: ..." --body "..."
-
-# Check CI status
-gh run list
-```
 
 ---
 
@@ -203,9 +205,9 @@ let content = dbc.to_dbc_string();
 
 ---
 
-## Environment (from memory)
+## Environment
 
-- Rust: `1.94.0` stable (aarch64-apple-darwin)
-- Node: `v24.14.0` via nvm
+- Rust: `1.94.0` stable (aarch64-apple-darwin) — toolchain at `~/.cargo/`
+- Node: `v24.14.0` via nvm (`~/.nvm/`)
 - npm: `11.9.0`
 - Tauri: `2.x`
