@@ -183,7 +183,9 @@ impl TryFrom<&DbcModel> for dbc_rs::Dbc {
         let mut dbc_builder =
             dbc_rs::DbcBuilder::new().version(version_builder).nodes(nodes_builder);
 
-        // Messages, signals, and value descriptions
+        // Pass 1 – add every message and its signals.
+        // VAL_ entries must be added AFTER the message exists in the builder,
+        // so we do a separate second pass below.
         for msg in &model.messages {
             let mut msg_builder = dbc_rs::MessageBuilder::new()
                 .id(msg.id)
@@ -231,8 +233,14 @@ impl TryFrom<&DbcModel> for dbc_rs::Dbc {
                 }
 
                 msg_builder = msg_builder.add_signal(sig_builder);
+            }
 
-                // VAL_ entries for this signal
+            dbc_builder = dbc_builder.add_message(msg_builder);
+        }
+
+        // Pass 2 – add VAL_ entries now that all messages are registered.
+        for msg in &model.messages {
+            for sig in &msg.signals {
                 if !sig.value_descriptions.is_empty() {
                     let mut vd_builder = dbc_rs::ValueDescriptionsBuilder::new();
                     for vd in &sig.value_descriptions {
@@ -242,8 +250,6 @@ impl TryFrom<&DbcModel> for dbc_rs::Dbc {
                         dbc_builder.add_value_description(msg.id, sig.name.as_str(), vd_builder);
                 }
             }
-
-            dbc_builder = dbc_builder.add_message(msg_builder);
         }
 
         dbc_builder.build()

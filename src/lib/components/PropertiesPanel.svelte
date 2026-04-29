@@ -14,11 +14,11 @@
   let msgComment = '';
   let msgExtended = false;
 
+  // Re-sync whenever the selected message OR the display mode changes
   $: if (selectedMsg && !selectedSig) {
+    const rawId = selectedMsg.is_extended ? selectedMsg.id & 0x1fffffff : selectedMsg.id;
+    msgId = $hexMode ? rawId.toString(16).toUpperCase() : rawId.toString(10);
     msgName = selectedMsg.name;
-    msgId = (selectedMsg.is_extended ? selectedMsg.id & 0x1fffffff : selectedMsg.id)
-      .toString(16)
-      .toUpperCase();
     msgDlc = selectedMsg.dlc;
     msgSender = selectedMsg.sender;
     msgComment = selectedMsg.comment ?? '';
@@ -27,7 +27,7 @@
 
   function applyMsgChanges() {
     if (!selectedMsg) return;
-    const rawId = parseInt(msgId, 16);
+    const rawId = $hexMode ? parseInt(msgId, 16) : parseInt(msgId, 10);
     if (isNaN(rawId)) return;
     const id = msgExtended ? rawId | 0x80000000 : rawId;
     dbcStore.updateMessage(selectedMsg.id, {
@@ -255,10 +255,10 @@
         <legend>Identification</legend>
         <label>Name <input bind:value={msgName} /></label>
         <label class="id-row">
-          CAN ID (hex)
+          CAN ID ({$hexMode ? 'hex' : 'dec'})
           <div class="id-input-wrap">
-            <span class="hex-prefix">0x</span>
-            <input class="hex-input" bind:value={msgId} pattern="[0-9A-Fa-f]+" />
+            {#if $hexMode}<span class="hex-prefix">0x</span>{/if}
+            <input class="hex-input" bind:value={msgId} spellcheck="false" />
           </div>
         </label>
         <label class="checkbox-label">
