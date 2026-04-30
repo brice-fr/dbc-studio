@@ -84,6 +84,12 @@
 
   function applySigChanges() {
     if (!selectedMsg || !selectedSig) return;
+    // Sort value descriptions by numeric value ascending and drop blank labels
+    const sortedVds = sigValueDescs
+      .filter((vd) => vd.label.trim() !== '')
+      .sort((a, b) => a.value - b.value);
+    // Reflect the sorted order back into the local state so the UI updates too
+    sigValueDescs = sortedVds;
     const patch: Partial<SignalModel> = {
       name: sigName,
       start_bit: sigStartBit,
@@ -99,7 +105,7 @@
       comment: sigComment || null,
       is_multiplexer: sigIsMux,
       multiplexer_switch_value: sigMuxValue !== '' ? parseInt(sigMuxValue) : null,
-      value_descriptions: sigValueDescs.filter((vd) => vd.label.trim() !== ''),
+      value_descriptions: sortedVds,
     };
     dbcStore.updateSignal(selectedMsg.id, selectedSig.name, patch);
     if (sigName !== selectedSig.name) {
