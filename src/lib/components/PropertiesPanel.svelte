@@ -291,10 +291,24 @@
         <label>Factor <input type="number" bind:value={sigFactor} step="any" /></label>
         <label>Offset <input type="number" bind:value={sigOffset} step="any" /></label>
         <label title="Physical minimum value (stored directly in the DBC file)">
-          Phys Min <input type="number" bind:value={sigMin} step="any" />
+          <span class="label-row">
+            Phys Min
+            <button type="button" class="auto-calc-btn"
+              title="Set to encodable minimum ({fmtNum(encodableLow)})"
+              on:click={() => sigMin = encodableLow}>auto calc.</button>
+          </span>
+          <input type="number" bind:value={sigMin} step="any"
+            class:out-of-range={sigMin < encodableLow} />
         </label>
         <label title="Physical maximum value (stored directly in the DBC file)">
-          Phys Max <input type="number" bind:value={sigMax} step="any" />
+          <span class="label-row">
+            Phys Max
+            <button type="button" class="auto-calc-btn"
+              title="Set to encodable maximum ({fmtNum(encodableHigh)})"
+              on:click={() => sigMax = encodableHigh}>auto calc.</button>
+          </span>
+          <input type="number" bind:value={sigMax} step="any"
+            class:out-of-range={sigMax > encodableHigh} />
         </label>
         <label>Unit <input bind:value={sigUnit} placeholder="e.g. rpm, km/h" /></label>
         <div class="phys-preview">
@@ -575,6 +589,31 @@
   }
   .hex-prefix { padding: 4px 6px; font-size: 12px; color: var(--text-muted); background: var(--bg-badge); }
   .hex-input  { border: none !important; border-radius: 0 !important; flex: 1; font-family: monospace; }
+  .label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 4px;
+  }
+  .auto-calc-btn {
+    font-size: 10px;
+    color: var(--accent);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .auto-calc-btn:hover { color: var(--accent-hover); }
+  /* Input turns dark-orange when the physical value is outside the encodable range */
+  label input.out-of-range {
+    border-color: #c2600a;
+    color: #c2600a;
+  }
+  label input.out-of-range:focus { border-color: #c2600a; }
   .phys-preview {
     font-size: 11px;
     color: var(--accent);
