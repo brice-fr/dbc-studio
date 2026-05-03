@@ -155,9 +155,22 @@
     sigValueDescs = sigValueDescs.map((vd, i) => i === idx ? { ...vd, label } : vd);
   }
 
-  // Physical value preview
-  $: physMin = sigMin * sigFactor + sigOffset;
-  $: physMax = sigMax * sigFactor + sigOffset;
+  // Encodable range: the physical values that correspond to the raw
+  // bit-pattern extremes, given the current factor/offset/length/sign.
+  // This is *not* the same as sigMin/sigMax — those are already physical
+  // values as stored in the DBC file and should never be recomputed here.
+  $: rawMin = sigUnsigned ? 0 : -(2 ** (sigLength - 1));
+  $: rawMax = sigUnsigned ? (2 ** sigLength) - 1 : (2 ** (sigLength - 1)) - 1;
+  // Factor can be negative, so the low/high physical ends may be swapped.
+  $: encodableLow  = Math.min(rawMin * sigFactor + sigOffset, rawMax * sigFactor + sigOffset);
+  $: encodableHigh = Math.max(rawMin * sigFactor + sigOffset, rawMax * sigFactor + sigOffset);
+
+  function fmtNum(n: number): string {
+    if (!isFinite(n)) return '?';
+    if (Number.isInteger(n)) return n.toString();
+    // Up to 6 significant figures, trailing zeros stripped.
+    return parseFloat(n.toPrecision(6)).toString();
+  }
 
   // ─── Attribute helpers ────────────────────────────────────────────────────
   $: msgAttributes = selectedMsg
@@ -274,14 +287,18 @@
       </fieldset>
 
       <fieldset>
-        <legend>Scaling</legend>
+        <legend>Scaling &amp; Physical Range</legend>
         <label>Factor <input type="number" bind:value={sigFactor} step="any" /></label>
         <label>Offset <input type="number" bind:value={sigOffset} step="any" /></label>
-        <label>Min    <input type="number" bind:value={sigMin}    step="any" /></label>
-        <label>Max    <input type="number" bind:value={sigMax}    step="any" /></label>
-        <label>Unit   <input bind:value={sigUnit} placeholder="e.g. rpm, km/h" /></label>
+        <label title="Physical minimum value (stored directly in the DBC file)">
+          Phys Min <input type="number" bind:value={sigMin} step="any" />
+        </label>
+        <label title="Physical maximum value (stored directly in the DBC file)">
+          Phys Max <input type="number" bind:value={sigMax} step="any" />
+        </label>
+        <label>Unit <input bind:value={sigUnit} placeholder="e.g. rpm, km/h" /></label>
         <div class="phys-preview">
-          Physical: [{physMin.toPrecision(4)} … {physMax.toPrecision(4)}]{sigUnit ? ' ' + sigUnit : ''}
+          Encodable: [{fmtNum(encodableLow)} … {fmtNum(encodableHigh)}]{sigUnit ? ' ' + sigUnit : ''}
         </div>
       </fieldset>
 
