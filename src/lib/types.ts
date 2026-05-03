@@ -4,6 +4,8 @@ export interface DbcModel {
   version: string | null;
   nodes: NodeModel[];
   messages: MessageModel[];
+  attribute_definitions: AttributeDefinitionModel[];
+  attribute_assignments: AttributeAssignmentModel[];
 }
 
 export interface NodeModel {
@@ -47,6 +49,38 @@ export interface SignalModel {
   value_descriptions: ValueDescriptionModel[];
 }
 
+// ─── Attribute types ──────────────────────────────────────────────────────────
+
+export interface AttributeValueModel {
+  int_val: number | null;
+  float_val: number | null;
+  string_val: string | null;
+}
+
+export interface AttributeDefinitionModel {
+  name: string;
+  /** "Network" | "Node" | "Message" | "Signal" */
+  object_type: string;
+  /** "Int" | "Hex" | "Float" | "String" | "Enum" */
+  value_type: string;
+  min_int: number | null;
+  max_int: number | null;
+  min_float: number | null;
+  max_float: number | null;
+  enum_values: string[];
+  default_value: AttributeValueModel | null;
+}
+
+export interface AttributeAssignmentModel {
+  attr_name: string;
+  /** "Network" | "Node" | "Message" | "Signal" */
+  target_type: string;
+  node_name: string | null;
+  message_id: number | null;
+  signal_name: string | null;
+  value: AttributeValueModel;
+}
+
 export interface ValidationIssue {
   severity: 'error' | 'warning';
   message: string;
@@ -57,7 +91,7 @@ export interface ValidationIssue {
 // ─── Factories ────────────────────────────────────────────────────────────────
 
 export function emptyModel(): DbcModel {
-  return { version: '', nodes: [], messages: [] };
+  return { version: '', nodes: [], messages: [], attribute_definitions: [], attribute_assignments: [] };
 }
 
 export function newMessage(id: number): MessageModel {

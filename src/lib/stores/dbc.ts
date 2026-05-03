@@ -125,6 +125,14 @@ function createDbcStore() {
     deleteNode(name: string) {
       const next = structuredClone(get({ subscribe }));
       next.nodes = next.nodes.filter((n) => n.name !== name);
+      // Cascade: clear transmitter on messages that used this node,
+      // and remove it from signal receiver lists.
+      for (const msg of next.messages) {
+        if (msg.sender === name) msg.sender = '';
+        for (const sig of msg.signals) {
+          sig.receivers = sig.receivers.filter((r) => r !== name);
+        }
+      }
       push(next);
     },
 

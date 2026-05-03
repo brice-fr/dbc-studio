@@ -1,5 +1,6 @@
 mod commands;
 mod dbc_model;
+mod dbc_sanitize;
 
 use commands::{file::*, model::*, validate::*};
 

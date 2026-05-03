@@ -19,10 +19,11 @@
     try {
       const path = await pickOpenFile();
       if (!path) return;
-      const model = await openDbc(path);
+      const { model, warnings } = await openDbc(path);
       dbcStore.load(model);
       markClean(path);
       showToast('success', `Opened ${path.split('/').pop()}`);
+      for (const w of warnings) showToast('info', w, 6000);
     } catch (e) {
       showToast('error', String(e));
     } finally {

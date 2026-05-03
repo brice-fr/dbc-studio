@@ -26,8 +26,13 @@ export async function pickSaveFile(defaultName?: string): Promise<string | null>
 
 // ─── DBC I/O ─────────────────────────────────────────────────────────────────
 
-export async function openDbc(path: string): Promise<DbcModel> {
-  return invoke<DbcModel>('open_dbc', { path });
+export interface OpenDbcResult {
+  model:    DbcModel;
+  warnings: string[];
+}
+
+export async function openDbc(path: string): Promise<OpenDbcResult> {
+  return invoke<OpenDbcResult>('open_dbc', { path });
 }
 
 export async function saveDbc(path: string, model: DbcModel): Promise<void> {

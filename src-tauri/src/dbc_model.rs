@@ -11,6 +11,10 @@ pub struct DbcModel {
     pub version: Option<String>,
     pub nodes: Vec<NodeModel>,
     pub messages: Vec<MessageModel>,
+    /// Attribute definitions (`BA_DEF_` entries).
+    pub attribute_definitions: Vec<AttributeDefinitionModel>,
+    /// Attribute value assignments (`BA_` entries).
+    pub attribute_assignments: Vec<AttributeAssignmentModel>,
 }
 
 /// An ECU node (BU_ entry).
@@ -79,6 +83,55 @@ pub struct SignalModel {
     pub value_descriptions: Vec<ValueDescriptionModel>,
 }
 
+// ─── Attribute model types ───────────────────────────────────────────────────
+
+/// A concrete attribute value (from `BA_` or `BA_DEF_DEF_`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttributeValueModel {
+    pub int_val: Option<i64>,
+    pub float_val: Option<f64>,
+    pub string_val: Option<String>,
+}
+
+impl AttributeValueModel {
+    fn from_dbc(v: &dbc_rs::AttributeValue) -> Self {
+        AttributeValueModel {
+            int_val: v.as_int(),
+            float_val: v.as_float(),
+            string_val: v.as_string().map(str::to_string),
+        }
+    }
+}
+
+/// An attribute definition (`BA_DEF_` entry).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttributeDefinitionModel {
+    pub name: String,
+    /// "Network", "Node", "Message", or "Signal"
+    pub object_type: String,
+    /// "Int", "Hex", "Float", "String", or "Enum"
+    pub value_type: String,
+    pub min_int: Option<i64>,
+    pub max_int: Option<i64>,
+    pub min_float: Option<f64>,
+    pub max_float: Option<f64>,
+    pub enum_values: Vec<String>,
+    /// Default value from `BA_DEF_DEF_` (if any).
+    pub default_value: Option<AttributeValueModel>,
+}
+
+/// An attribute value assignment (`BA_` entry).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttributeAssignmentModel {
+    pub attr_name: String,
+    /// "Network", "Node", "Message", or "Signal"
+    pub target_type: String,
+    pub node_name: Option<String>,
+    pub message_id: Option<u32>,
+    pub signal_name: Option<String>,
+    pub value: AttributeValueModel,
+}
+
 /// A validation issue found in the model.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValidationIssue {
@@ -111,7 +164,10 @@ impl From<&dbc_rs::Dbc> for DbcModel {
             .map(|msg| message_model_from(msg, dbc))
             .collect();
 
-        DbcModel { version, nodes, messages }
+        let attribute_definitions = build_attribute_definitions(dbc);
+        let attribute_assignments = build_attribute_assignments(dbc);
+
+        DbcModel { version, nodes, messages, attribute_definitions, attribute_assignments }
     }
 }
 
@@ -160,6 +216,87 @@ fn signal_model_from(sig: &dbc_rs::Signal, msg_id: u32, dbc: &dbc_rs::Dbc) -> Si
         comment: sig.comment().map(str::to_string),
         value_descriptions,
     }
+}
+
+fn build_attribute_definitions(dbc: &dbc_rs::Dbc) -> Vec<AttributeDefinitionModel> {
+    dbc.attribute_definitions()
+        .iter()
+        .map(|def| {
+            let object_type = match def.object_type() {
+                dbc_rs::AttributeObjectType::Network => "Network",
+                dbc_rs::AttributeObjectType::Node    => "Node",
+                dbc_rs::AttributeObjectType::Message => "Message",
+                dbc_rs::AttributeObjectType::Signal  => "Signal",
+            }
+            .to_string();
+
+            let (value_type, min_int, max_int, min_float, max_float, enum_values) =
+                match def.value_type() {
+                    dbc_rs::AttributeValueType::Int { min, max } => {
+                        ("Int".into(), Some(*min), Some(*max), None, None, vec![])
+                    }
+                    dbc_rs::AttributeValueType::Hex { min, max } => {
+                        ("Hex".into(), Some(*min), Some(*max), None, None, vec![])
+                    }
+                    dbc_rs::AttributeValueType::Float { min, max } => {
+                        ("Float".into(), None, None, Some(*min), Some(*max), vec![])
+                    }
+                    dbc_rs::AttributeValueType::String => {
+                        ("String".into(), None, None, None, None, vec![])
+                    }
+                    dbc_rs::AttributeValueType::Enum { values } => {
+                        let ev = values.iter().map(|s| s.as_str().to_string()).collect();
+                        ("Enum".into(), None, None, None, None, ev)
+                    }
+                };
+
+            let default_value = dbc
+                .attribute_default(def.name())
+                .map(AttributeValueModel::from_dbc);
+
+            AttributeDefinitionModel {
+                name: def.name().to_string(),
+                object_type,
+                value_type,
+                min_int,
+                max_int,
+                min_float,
+                max_float,
+                enum_values,
+                default_value,
+            }
+        })
+        .collect()
+}
+
+fn build_attribute_assignments(dbc: &dbc_rs::Dbc) -> Vec<AttributeAssignmentModel> {
+    dbc.attribute_values()
+        .iter()
+        .map(|((attr_name, target), value)| {
+            let (target_type, node_name, message_id, signal_name) = match target {
+                dbc_rs::AttributeTarget::Network => {
+                    ("Network".into(), None, None, None)
+                }
+                dbc_rs::AttributeTarget::Node(n) => {
+                    ("Node".into(), Some(n.as_str().to_string()), None, None)
+                }
+                dbc_rs::AttributeTarget::Message(id) => {
+                    ("Message".into(), None, Some(*id), None)
+                }
+                dbc_rs::AttributeTarget::Signal(id, sig) => {
+                    ("Signal".into(), None, Some(*id), Some(sig.as_str().to_string()))
+                }
+            };
+            AttributeAssignmentModel {
+                attr_name: attr_name.to_string(),
+                target_type,
+                node_name,
+                message_id,
+                signal_name,
+                value: AttributeValueModel::from_dbc(value),
+            }
+        })
+        .collect()
 }
 
 // ─── DbcModel → dbc_rs::Dbc (for saving) ────────────────────────────────────

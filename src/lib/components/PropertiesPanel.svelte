@@ -1,22 +1,46 @@
 <script lang="ts">
   import { dbcStore } from '../stores/dbc';
-  import { selectedMessageId, selectedSignalName, hexMode } from '../stores/ui';
-  import type { MessageModel, SignalModel, ValueDescriptionModel } from '../types';
+  import {
+    selectedMessageId, selectedSignalName, selectedNodeName,
+    selectMessage, selectSignal, selectNode,
+    showToast, hexMode,
+  } from '../stores/ui';
+  import type { MessageModel, SignalModel, ValueDescriptionModel, AttributeAssignmentModel } from '../types';
+  import NodePicker from './NodePicker.svelte';
 
-  $: selectedMsg = $dbcStore.messages.find((m) => m.id === $selectedMessageId) ?? null;
-  $: selectedSig = selectedMsg?.signals.find((s) => s.name === $selectedSignalName) ?? null;
+  // ─── Derived selection ────────────────────────────────────────────────────
+  $: selectedMsg  = $dbcStore.messages.find((m) => m.id === $selectedMessageId) ?? null;
+  $: selectedSig  = selectedMsg?.signals.find((s) => s.name === $selectedSignalName) ?? null;
+  $: selectedNode = $dbcStore.nodes.find((n) => n.name === $selectedNodeName) ?? null;
+
+  // ─── Node editing ─────────────────────────────────────────────────────────
+  let nodeName    = '';
+  let nodeComment = '';
+
+  $: if (selectedNode) {
+    nodeName    = selectedNode.name;
+    nodeComment = selectedNode.comment ?? '';
+  }
+
+  function applyNodeChanges() {
+    if (!selectedNode) return;
+    const oldName = selectedNode.name;
+    const newName = nodeName.trim();
+    if (!newName) return;
+    if (newName !== oldName && $dbcStore.nodes.some((n) => n.name === newName)) return;
+    dbcStore.updateNode(oldName, { name: newName, comment: nodeComment || null });
+    if (newName !== oldName) selectedNodeName.set(newName);
+  }
 
   // ─── Message editing ──────────────────────────────────────────────────────
-  let msgName = '';
-  let msgId = '';
-  let msgDlc = 8;
-  let msgSender = '';
-  let msgComment = '';
+  let msgName     = '';
+  let msgId       = '';
+  let msgDlc      = 8;
+  let msgSender   = '';
+  let msgComment  = '';
   let msgExtended = false;
 
-  // Sync all non-ID fields when the message selection changes.
-  // Intentionally does NOT reference $hexMode — so toggling hex/dec
-  // does not reset fields the user has already edited but not yet applied.
+  // Sync non-ID fields on message selection change (no $hexMode dep).
   $: if (selectedMsg && !selectedSig) {
     msgName     = selectedMsg.name;
     msgDlc      = selectedMsg.dlc;
@@ -25,8 +49,7 @@
     msgExtended = selectedMsg.is_extended;
   }
 
-  // Reformat the ID field only — depends on both the message and the display
-  // mode, so it re-runs on either change without touching other fields.
+  // Reformat ID only (has $hexMode dep).
   $: if (selectedMsg && !selectedSig) {
     const rawId = selectedMsg.is_extended ? selectedMsg.id & 0x1fffffff : selectedMsg.id;
     msgId = $hexMode ? rawId.toString(16).toUpperCase() : rawId.toString(10);
@@ -48,91 +71,86 @@
   }
 
   // ─── Signal editing ───────────────────────────────────────────────────────
-  let sigName = '';
-  let sigStartBit = 0;
-  let sigLength = 8;
+  let sigName      = '';
+  let sigStartBit  = 0;
+  let sigLength    = 8;
   let sigByteOrder = 'LittleEndian';
-  let sigUnsigned = true;
-  let sigFactor = 1;
-  let sigOffset = 0;
-  let sigMin = 0;
-  let sigMax = 255;
-  let sigUnit = '';
-  let sigReceivers = '';
-  let sigComment = '';
-  let sigIsMux = false;
-  let sigMuxValue = '';
+  let sigUnsigned  = true;
+  let sigFactor    = 1;
+  let sigOffset    = 0;
+  let sigMin       = 0;
+  let sigMax       = 255;
+  let sigUnit      = '';
+  let sigReceivers: string[] = [];
+  let sigComment   = '';
+  /** 'normal' | 'switch' | 'multiplexed' */
+  let sigMuxType: 'normal' | 'switch' | 'multiplexed' = 'normal';
+  let sigMuxSwitchVal = 0;
   let sigValueDescs: ValueDescriptionModel[] = [];
 
   $: if (selectedSig) {
-    sigName = selectedSig.name;
-    sigStartBit = selectedSig.start_bit;
-    sigLength = selectedSig.length;
-    sigByteOrder = selectedSig.byte_order;
-    sigUnsigned = selectedSig.is_unsigned;
-    sigFactor = selectedSig.factor;
-    sigOffset = selectedSig.offset;
-    sigMin = selectedSig.min;
-    sigMax = selectedSig.max;
-    sigUnit = selectedSig.unit ?? '';
-    sigReceivers = selectedSig.receivers.join(', ');
-    sigComment = selectedSig.comment ?? '';
-    sigIsMux = selectedSig.is_multiplexer;
-    sigMuxValue = selectedSig.multiplexer_switch_value?.toString() ?? '';
-    sigValueDescs = selectedSig.value_descriptions.map((vd) => ({ ...vd }));
+    sigName        = selectedSig.name;
+    sigStartBit    = selectedSig.start_bit;
+    sigLength      = selectedSig.length;
+    sigByteOrder   = selectedSig.byte_order;
+    sigUnsigned    = selectedSig.is_unsigned;
+    sigFactor      = selectedSig.factor;
+    sigOffset      = selectedSig.offset;
+    sigMin         = selectedSig.min;
+    sigMax         = selectedSig.max;
+    sigUnit        = selectedSig.unit ?? '';
+    sigReceivers   = [...selectedSig.receivers];
+    sigComment     = selectedSig.comment ?? '';
+    sigMuxType     = selectedSig.is_multiplexer
+                       ? 'switch'
+                       : selectedSig.multiplexer_switch_value !== null
+                         ? 'multiplexed'
+                         : 'normal';
+    sigMuxSwitchVal = selectedSig.multiplexer_switch_value ?? 0;
+    sigValueDescs  = selectedSig.value_descriptions.map((vd) => ({ ...vd }));
   }
 
   function applySigChanges() {
     if (!selectedMsg || !selectedSig) return;
-    // Sort value descriptions by numeric value ascending and drop blank labels
     const sortedVds = sigValueDescs
       .filter((vd) => vd.label.trim() !== '')
       .sort((a, b) => a.value - b.value);
-    // Reflect the sorted order back into the local state so the UI updates too
     sigValueDescs = sortedVds;
     const patch: Partial<SignalModel> = {
-      name: sigName,
-      start_bit: sigStartBit,
-      length: sigLength,
-      byte_order: sigByteOrder,
-      is_unsigned: sigUnsigned,
-      factor: sigFactor,
-      offset: sigOffset,
-      min: sigMin,
-      max: sigMax,
-      unit: sigUnit || null,
-      receivers: sigReceivers.split(',').map((r) => r.trim()).filter(Boolean),
-      comment: sigComment || null,
-      is_multiplexer: sigIsMux,
-      multiplexer_switch_value: sigMuxValue !== '' ? parseInt(sigMuxValue) : null,
+      name:         sigName,
+      start_bit:    sigStartBit,
+      length:       sigLength,
+      byte_order:   sigByteOrder,
+      is_unsigned:  sigUnsigned,
+      factor:       sigFactor,
+      offset:       sigOffset,
+      min:          sigMin,
+      max:          sigMax,
+      unit:         sigUnit || null,
+      receivers:    sigReceivers.filter(Boolean),
+      comment:      sigComment || null,
+      is_multiplexer:             sigMuxType === 'switch',
+      multiplexer_switch_value:   sigMuxType === 'multiplexed' ? sigMuxSwitchVal : null,
       value_descriptions: sortedVds,
     };
     dbcStore.updateSignal(selectedMsg.id, selectedSig.name, patch);
-    if (sigName !== selectedSig.name) {
-      selectedSignalName.set(sigName);
-    }
+    if (sigName !== selectedSig.name) selectedSignalName.set(sigName);
   }
 
   // ─── Value descriptions helpers ───────────────────────────────────────────
   function addValueDesc() {
-    // Find the next unused integer value
     const usedVals = new Set(sigValueDescs.map((v) => v.value));
     let next = 0;
     while (usedVals.has(next)) next++;
     sigValueDescs = [...sigValueDescs, { value: next, label: '' }];
   }
-
   function removeValueDesc(idx: number) {
     sigValueDescs = sigValueDescs.filter((_, i) => i !== idx);
   }
-
   function updateValueDescValue(idx: number, raw: string) {
     const n = parseInt(raw);
-    if (!isNaN(n)) {
-      sigValueDescs = sigValueDescs.map((vd, i) => i === idx ? { ...vd, value: n } : vd);
-    }
+    if (!isNaN(n)) sigValueDescs = sigValueDescs.map((vd, i) => i === idx ? { ...vd, value: n } : vd);
   }
-
   function updateValueDescLabel(idx: number, label: string) {
     sigValueDescs = sigValueDescs.map((vd, i) => i === idx ? { ...vd, label } : vd);
   }
@@ -140,12 +158,94 @@
   // Physical value preview
   $: physMin = sigMin * sigFactor + sigOffset;
   $: physMax = sigMax * sigFactor + sigOffset;
+
+  // ─── Attribute helpers ────────────────────────────────────────────────────
+  $: msgAttributes = selectedMsg
+    ? $dbcStore.attribute_assignments.filter(
+        (a) => a.target_type === 'Message' && a.message_id === selectedMsg!.id,
+      )
+    : [];
+
+  $: sigAttributes = (selectedSig && selectedMsg)
+    ? $dbcStore.attribute_assignments.filter(
+        (a) =>
+          a.target_type === 'Signal' &&
+          a.message_id === selectedMsg!.id &&
+          a.signal_name === selectedSig!.name,
+      )
+    : [];
+
+  $: nodeAttributes = selectedNode
+    ? $dbcStore.attribute_assignments.filter(
+        (a) => a.target_type === 'Node' && a.node_name === selectedNode!.name,
+      )
+    : [];
+
+  // ─── Delete handlers (from properties panel) ─────────────────────────────
+  function deleteCurrentSignal() {
+    if (!selectedMsg || !selectedSig) return;
+    if (!confirm(`Delete signal "${selectedSig.name}" from message "${selectedMsg.name}"?`)) return;
+    dbcStore.deleteSignal(selectedMsg.id, selectedSig.name);
+    selectMessage(selectedMsg.id);
+    showToast('info', `Deleted signal "${selectedSig.name}"`);
+  }
+
+  function deleteCurrentMessage() {
+    if (!selectedMsg) return;
+    const sigCount = selectedMsg.signals.length;
+    const detail = sigCount > 0 ? `\n\nThis will also delete its ${sigCount} signal${sigCount > 1 ? 's' : ''}.` : '';
+    if (!confirm(`Delete message "${selectedMsg.name}"?${detail}`)) return;
+    dbcStore.deleteMessage(selectedMsg.id);
+    selectMessage(null);
+    showToast('info', `Deleted message "${selectedMsg.name}"`);
+  }
+
+  function deleteCurrentNode() {
+    if (!selectedNode) return;
+    const name = selectedNode.name;
+    const txMessages = $dbcStore.messages.filter((m) => m.sender === name);
+    const rxSignals: { msgName: string; sigName: string }[] = [];
+    for (const msg of $dbcStore.messages) {
+      for (const sig of msg.signals) {
+        if (sig.receivers.includes(name)) rxSignals.push({ msgName: msg.name, sigName: sig.name });
+      }
+    }
+    let msg = `Delete node "${name}"?`;
+    if (txMessages.length > 0 || rxSignals.length > 0) {
+      msg += '\n\nThis node is currently referenced:';
+      if (txMessages.length > 0) {
+        msg += `\n\nTransmitter of ${txMessages.length} message${txMessages.length > 1 ? 's' : ''}:`;
+        msg += '\n' + txMessages.map((m) => `  • ${m.name}`).join('\n');
+      }
+      if (rxSignals.length > 0) {
+        msg += `\n\nReceiver of ${rxSignals.length} signal${rxSignals.length > 1 ? 's' : ''}:`;
+        msg += '\n' + rxSignals.map((s) => `  • ${s.msgName} → ${s.sigName}`).join('\n');
+      }
+      msg += '\n\nAll affected transmitter / receiver fields will be reset to None.';
+    }
+    if (!confirm(msg)) return;
+    dbcStore.deleteNode(name);
+    selectNode(null);
+    showToast('info', `Deleted node "${name}"`);
+  }
+
+  function fmtAttrVal(a: AttributeAssignmentModel): string {
+    const v = a.value;
+    if (v.int_val   !== null) return String(v.int_val);
+    if (v.float_val !== null) return String(v.float_val);
+    if (v.string_val !== null) return v.string_val;
+    return '—';
+  }
 </script>
 
 <div class="props-panel">
+
   {#if selectedSig && selectedMsg}
-    <!-- Signal properties -->
-    <div class="panel-header">Signal: {selectedSig.name}</div>
+    <!-- ═══ Signal properties ══════════════════════════════════════════════ -->
+    <div class="panel-header">
+      <span class="header-title">Signal: {selectedSig.name}</span>
+      <button class="delete-btn" title="Delete signal" on:click={deleteCurrentSignal}>Delete</button>
+    </div>
     <form class="props-form" on:submit|preventDefault={applySigChanges}>
 
       <fieldset>
@@ -161,8 +261,8 @@
         <label>
           Value Type
           <select bind:value={sigUnsigned}>
-            <option value={true}>Unsigned</option>
-            <option value={false}>Signed</option>
+            <option value={true}>Unsigned (+)</option>
+            <option value={false}>Signed (−)</option>
           </select>
         </label>
       </fieldset>
@@ -177,11 +277,11 @@
         <legend>Scaling</legend>
         <label>Factor <input type="number" bind:value={sigFactor} step="any" /></label>
         <label>Offset <input type="number" bind:value={sigOffset} step="any" /></label>
-        <label>Min <input type="number" bind:value={sigMin} step="any" /></label>
-        <label>Max <input type="number" bind:value={sigMax} step="any" /></label>
-        <label>Unit <input bind:value={sigUnit} placeholder="e.g. rpm, km/h" /></label>
+        <label>Min    <input type="number" bind:value={sigMin}    step="any" /></label>
+        <label>Max    <input type="number" bind:value={sigMax}    step="any" /></label>
+        <label>Unit   <input bind:value={sigUnit} placeholder="e.g. rpm, km/h" /></label>
         <div class="phys-preview">
-          Physical: [{physMin.toPrecision(4)} … {physMax.toPrecision(4)}] {sigUnit}
+          Physical: [{physMin.toPrecision(4)} … {physMax.toPrecision(4)}]{sigUnit ? ' ' + sigUnit : ''}
         </div>
       </fieldset>
 
@@ -189,7 +289,7 @@
         <legend>Value Descriptions (VAL_)</legend>
         {#if sigValueDescs.length > 0}
           <div class="val-table">
-            <div class="val-row val-header">
+            <div class="val-row val-header-row">
               <span class="val-cell-value">Value ({$hexMode ? 'hex' : 'dec'})</span>
               <span class="val-cell-label">Label</span>
               <span class="val-cell-del"></span>
@@ -226,12 +326,7 @@
                   />
                 </div>
                 <div class="val-cell-del">
-                  <button
-                    type="button"
-                    class="val-del-btn"
-                    title="Remove"
-                    on:click={() => removeValueDesc(idx)}
-                  >✕</button>
+                  <button type="button" class="val-del-btn" title="Remove" on:click={() => removeValueDesc(idx)}>✕</button>
                 </div>
               </div>
             {/each}
@@ -244,24 +339,52 @@
 
       <fieldset>
         <legend>Multiplexing</legend>
-        <label class="checkbox-label">
-          <input type="checkbox" bind:checked={sigIsMux} /> Multiplexer switch (M)
+        <label>
+          Signal Type
+          <select bind:value={sigMuxType}>
+            <option value="normal">Normal signal</option>
+            <option value="switch">Multiplexer switch (M)</option>
+            <option value="multiplexed">Multiplexed signal (m&lt;N&gt;)</option>
+          </select>
         </label>
-        <label>Mux value (m&lt;N&gt;) <input bind:value={sigMuxValue} placeholder="none" /></label>
+        {#if sigMuxType === 'multiplexed'}
+          <label>
+            Switch Value (N)
+            <input type="number" bind:value={sigMuxSwitchVal} min="0" />
+          </label>
+        {/if}
       </fieldset>
 
       <fieldset>
         <legend>Other</legend>
-        <label>Receivers <input bind:value={sigReceivers} placeholder="ECM, TCM (comma-separated)" /></label>
-        <label>Comment <textarea bind:value={sigComment} rows="2"></textarea></label>
+        <label>
+          Receivers
+          <NodePicker bind:values={sigReceivers} multiple={true} />
+        </label>
+        <label>Comment   <textarea bind:value={sigComment} rows="2"></textarea></label>
       </fieldset>
+
+      {#if sigAttributes.length > 0}
+        <fieldset class="attrs-fieldset">
+          <legend>Attributes (BA_)</legend>
+          <div class="attr-table">
+            {#each sigAttributes as a}
+              <span class="attr-name">{a.attr_name}</span>
+              <span class="attr-value">{fmtAttrVal(a)}</span>
+            {/each}
+          </div>
+        </fieldset>
+      {/if}
 
       <button type="submit" class="apply-btn">Apply Changes</button>
     </form>
 
   {:else if selectedMsg}
-    <!-- Message properties -->
-    <div class="panel-header">Message: {selectedMsg.name}</div>
+    <!-- ═══ Message properties ═════════════════════════════════════════════ -->
+    <div class="panel-header">
+      <span class="header-title">Message: {selectedMsg.name}</span>
+      <button class="delete-btn" title="Delete message" on:click={deleteCurrentMessage}>Delete</button>
+    </div>
     <form class="props-form" on:submit|preventDefault={applyMsgChanges}>
 
       <fieldset>
@@ -281,7 +404,10 @@
           DLC (bytes)
           <input type="number" bind:value={msgDlc} min="0" max="64" />
         </label>
-        <label>Transmitter <input bind:value={msgSender} placeholder="e.g. ECM" /></label>
+        <label>
+          Transmitter
+          <NodePicker bind:value={msgSender} multiple={false} />
+        </label>
       </fieldset>
 
       <fieldset>
@@ -289,12 +415,54 @@
         <label>Comment <textarea bind:value={msgComment} rows="3"></textarea></label>
       </fieldset>
 
+      {#if msgAttributes.length > 0}
+        <fieldset class="attrs-fieldset">
+          <legend>Attributes (BA_)</legend>
+          <div class="attr-table">
+            {#each msgAttributes as a}
+              <span class="attr-name">{a.attr_name}</span>
+              <span class="attr-value">{fmtAttrVal(a)}</span>
+            {/each}
+          </div>
+        </fieldset>
+      {/if}
+
+      <button type="submit" class="apply-btn">Apply Changes</button>
+    </form>
+
+  {:else if selectedNode}
+    <!-- ═══ Node properties ════════════════════════════════════════════════ -->
+    <div class="panel-header">
+      <span class="header-title">Node: {selectedNode.name}</span>
+      <button class="delete-btn" title="Delete node" on:click={deleteCurrentNode}>Delete</button>
+    </div>
+    <form class="props-form" on:submit|preventDefault={applyNodeChanges}>
+
+      <fieldset>
+        <legend>Identification</legend>
+        <label>Name    <input bind:value={nodeName} /></label>
+        <label>Comment <textarea bind:value={nodeComment} rows="3"></textarea></label>
+      </fieldset>
+
+      {#if nodeAttributes.length > 0}
+        <fieldset class="attrs-fieldset">
+          <legend>Attributes (BA_)</legend>
+          <div class="attr-table">
+            {#each nodeAttributes as a}
+              <span class="attr-name">{a.attr_name}</span>
+              <span class="attr-value">{fmtAttrVal(a)}</span>
+            {/each}
+          </div>
+        </fieldset>
+      {/if}
+
       <button type="submit" class="apply-btn">Apply Changes</button>
     </form>
 
   {:else}
-    <div class="empty-props">Select a message or signal to view properties.</div>
+    <div class="empty-props">Select a message, signal, or node to view its properties.</div>
   {/if}
+
 </div>
 
 <style>
@@ -307,18 +475,36 @@
     border-left: 1px solid var(--border);
   }
   .panel-header {
-    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    padding: 5px 8px 5px 10px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .header-title {
     font-size: 11px;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--text-muted);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    flex: 1;
   }
+  .delete-btn {
+    flex-shrink: 0;
+    font-size: 11px;
+    padding: 3px 8px;
+    border: 1px solid #fca5a5;
+    border-radius: 4px;
+    background: #fff5f5;
+    color: #b91c1c;
+    cursor: pointer;
+  }
+  .delete-btn:hover { background: #fee2e2; border-color: #f87171; }
   .props-form {
     flex: 1;
     overflow-y: auto;
@@ -361,20 +547,17 @@
     width: 100%;
     box-sizing: border-box;
   }
-  label input:focus, label select:focus, label textarea:focus {
-    border-color: var(--accent);
-  }
+  label input:focus, label select:focus, label textarea:focus { border-color: var(--accent); }
   label textarea { resize: vertical; min-height: 40px; }
   .checkbox-label { flex-direction: row; align-items: center; gap: 8px; }
   .checkbox-label input { width: auto; }
   .id-row .id-input-wrap {
     display: flex; align-items: center;
     border: 1px solid var(--border); border-radius: 4px;
-    overflow: hidden;
-    background: var(--bg-input);
+    overflow: hidden; background: var(--bg-input);
   }
   .hex-prefix { padding: 4px 6px; font-size: 12px; color: var(--text-muted); background: var(--bg-badge); }
-  .hex-input { border: none !important; border-radius: 0 !important; flex: 1; font-family: monospace; }
+  .hex-input  { border: none !important; border-radius: 0 !important; flex: 1; font-family: monospace; }
   .phys-preview {
     font-size: 11px;
     color: var(--accent);
@@ -383,19 +566,15 @@
     padding: 3px 6px;
     font-family: monospace;
   }
-  /* Value descriptions table */
-  .val-table {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
+  /* ── Value descriptions ────────────────────────────────────────────────── */
+  .val-table { display: flex; flex-direction: column; gap: 2px; }
   .val-row {
     display: grid;
     grid-template-columns: 90px 1fr 22px;
     gap: 4px;
     align-items: center;
   }
-  .val-header {
+  .val-header-row {
     font-size: 10px;
     font-weight: 600;
     color: var(--text-muted);
@@ -407,7 +586,7 @@
   }
   .val-cell-value { display: flex; align-items: center; gap: 2px; }
   .val-cell-label { display: flex; align-items: center; }
-  .val-cell-del { display: flex; align-items: center; justify-content: center; }
+  .val-cell-del   { display: flex; align-items: center; justify-content: center; }
   .val-input {
     width: 100%;
     font-size: 11px;
@@ -422,24 +601,13 @@
   .val-input:focus { border-color: var(--accent); }
   .val-input-value { font-family: monospace; }
   .mono { font-family: monospace; }
-  .hex-prefix-sm {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-family: monospace;
-    flex-shrink: 0;
-  }
+  .hex-prefix-sm { font-size: 11px; color: var(--text-muted); font-family: monospace; flex-shrink: 0; }
   .val-del-btn {
     background: none; border: none; cursor: pointer;
-    padding: 2px 3px; font-size: 10px; color: var(--text-muted);
-    border-radius: 3px;
+    padding: 2px 3px; font-size: 10px; color: var(--text-muted); border-radius: 3px;
   }
   .val-del-btn:hover { background: #e53e3e20; color: #e53e3e; }
-  .val-empty {
-    font-size: 11px;
-    color: var(--text-muted);
-    font-style: italic;
-    padding: 2px 0;
-  }
+  .val-empty { font-size: 11px; color: var(--text-muted); font-style: italic; padding: 2px 0; }
   .val-add-btn {
     align-self: flex-start;
     font-size: 11px;
@@ -452,6 +620,17 @@
     margin-top: 2px;
   }
   .val-add-btn:hover { background: var(--bg-hover); color: var(--text); }
+  /* ── Attributes read-only table ───────────────────────────────────────── */
+  .attrs-fieldset { background: var(--bg-main); }
+  .attr-table {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 2px 8px;
+    font-size: 11px;
+  }
+  .attr-name  { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .attr-value { font-family: monospace; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* ── Buttons ─────────────────────────────────────────────────────────── */
   .apply-btn {
     margin-top: 4px;
     padding: 6px 12px;

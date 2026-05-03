@@ -1,0 +1,6 @@
+# Build-time limits passed to dbc-rs via its build.rs environment knobs.
+# DBC_MAX_NAME_SIZE controls the maximum length accepted for identifiers,
+# version strings, signal units, VAL_ labels, and attribute names.
+# The DBC spec says 32, but real-world files routinely exceed that.
+[env]
+DBC_MAX_NAME_SIZE = "1024"

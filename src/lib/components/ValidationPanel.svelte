@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { validationIssues, showValidationPanel } from '../stores/ui';
+  import { validationIssues, showValidationPanel, selectMessage, selectSignal } from '../stores/ui';
   import { dbcStore } from '../stores/dbc';
   import { validateDbc } from '../api';
 
@@ -20,6 +20,14 @@
 
   $: errorCount   = $validationIssues.filter((i) => i.severity === 'error').length;
   $: warningCount = $validationIssues.filter((i) => i.severity === 'warning').length;
+
+  function navigateToIssue(issue: { message_id: number | null; signal_name: string | null }) {
+    if (issue.message_id !== null && issue.signal_name !== null) {
+      selectSignal(issue.message_id, issue.signal_name);
+    } else if (issue.message_id !== null) {
+      selectMessage(issue.message_id);
+    }
+  }
 </script>
 
 {#if $showValidationPanel}
@@ -45,15 +53,35 @@
     {:else}
       <div class="val-list">
         {#each $validationIssues as issue}
-          <div class="val-issue" class:is-error={issue.severity === 'error'} class:is-warning={issue.severity === 'warning'}>
-            <span class="issue-icon">{issue.severity === 'error' ? '✖' : '⚠'}</span>
-            <span class="issue-msg">{issue.message}</span>
-            {#if issue.message_id !== null || issue.signal_name !== null}
+          {#if issue.message_id !== null}
+            <!-- Navigable: render as interactive button-role div -->
+            <div
+              class="val-issue navigable"
+              class:is-error={issue.severity === 'error'}
+              class:is-warning={issue.severity === 'warning'}
+              role="button"
+              tabindex="0"
+              on:click={() => navigateToIssue(issue)}
+              on:keydown={(e) => e.key === 'Enter' && navigateToIssue(issue)}
+            >
+              <span class="issue-icon">{issue.severity === 'error' ? '✖' : '⚠'}</span>
+              <span class="issue-msg">{issue.message}</span>
               <span class="issue-loc">
-                {#if issue.message_id !== null}ID 0x{issue.message_id.toString(16).toUpperCase()}{/if}{#if issue.message_id !== null && issue.signal_name !== null} · {/if}{#if issue.signal_name !== null}{issue.signal_name}{/if}
+                ID 0x{issue.message_id.toString(16).toUpperCase()}{#if issue.signal_name !== null} · {issue.signal_name}{/if}
               </span>
-            {/if}
-          </div>
+              <span class="issue-goto" title="Jump to location">→</span>
+            </div>
+          {:else}
+            <!-- Non-navigable: plain div, no tabindex -->
+            <div
+              class="val-issue"
+              class:is-error={issue.severity === 'error'}
+              class:is-warning={issue.severity === 'warning'}
+            >
+              <span class="issue-icon">{issue.severity === 'error' ? '✖' : '⚠'}</span>
+              <span class="issue-msg">{issue.message}</span>
+            </div>
+          {/if}
         {/each}
       </div>
     {/if}
@@ -120,14 +148,15 @@
     padding: 4px 10px;
     font-size: 12px;
     border-bottom: 1px solid var(--border-light);
+    outline: none;
   }
   .val-issue:last-child { border-bottom: none; }
-  .is-error  { background: #fff5f5; }
+  .val-issue.navigable  { cursor: pointer; }
+  .val-issue.navigable:hover { filter: brightness(0.96); }
+  .val-issue.navigable:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+  .is-error   { background: #fff5f5; }
   .is-warning { background: #fffbeb; }
-  .issue-icon {
-    flex-shrink: 0;
-    font-size: 10px;
-  }
+  .issue-icon { flex-shrink: 0; font-size: 10px; }
   .is-error   .issue-icon { color: #e53e3e; }
   .is-warning .issue-icon { color: #d97706; }
   .issue-msg  { flex: 1; color: var(--text); }
@@ -137,4 +166,13 @@
     color: var(--text-muted);
     flex-shrink: 0;
   }
+  .issue-goto {
+    flex-shrink: 0;
+    font-size: 11px;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 0.1s;
+  }
+  .val-issue.navigable:hover .issue-goto,
+  .val-issue.navigable:focus-visible .issue-goto { opacity: 1; }
 </style>

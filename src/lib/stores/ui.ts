@@ -6,15 +6,24 @@ import type { ValidationIssue } from '../types';
 
 export const selectedMessageId = writable<number | null>(null);
 export const selectedSignalName = writable<string | null>(null);
+export const selectedNodeName = writable<string | null>(null);
 
 export function selectMessage(id: number | null) {
   selectedMessageId.set(id);
   selectedSignalName.set(null);
+  selectedNodeName.set(null);
 }
 
 export function selectSignal(messageId: number, signalName: string) {
   selectedMessageId.set(messageId);
   selectedSignalName.set(signalName);
+  selectedNodeName.set(null);
+}
+
+export function selectNode(name: string | null) {
+  selectedNodeName.set(name);
+  selectedMessageId.set(null);
+  selectedSignalName.set(null);
 }
 
 // ─── Validation panel ─────────────────────────────────────────────────────────
