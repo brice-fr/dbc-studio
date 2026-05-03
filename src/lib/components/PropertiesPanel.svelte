@@ -298,7 +298,7 @@
               on:click={() => sigMin = encodableLow}>auto calc.</button>
           </span>
           <input type="number" bind:value={sigMin} step="any"
-            class:out-of-range={sigMin < encodableLow} />
+            class:out-of-range={sigMin < Math.floor(encodableLow)} />
         </label>
         <label title="Physical maximum value (stored directly in the DBC file)">
           <span class="label-row">
@@ -308,7 +308,7 @@
               on:click={() => sigMax = encodableHigh}>auto calc.</button>
           </span>
           <input type="number" bind:value={sigMax} step="any"
-            class:out-of-range={sigMax > encodableHigh} />
+            class:out-of-range={sigMax > Math.ceil(encodableHigh)} />
         </label>
         <label>Unit <input bind:value={sigUnit} placeholder="e.g. rpm, km/h" /></label>
         <div class="phys-preview">
