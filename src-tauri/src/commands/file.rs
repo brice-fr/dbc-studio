@@ -56,6 +56,16 @@ pub fn open_dbc(path: String) -> Result<OpenDbcResult, String> {
     Ok(OpenDbcResult { model, warnings })
 }
 
+/// Return the path of the file that was passed to the app at launch (via a
+/// file-association double-click or CLI argument), then clear it so subsequent
+/// calls return `None`.  The frontend calls this once on mount to handle cold
+/// launches; warm launches (app already running) are handled via the `open-file`
+/// event emitted by the macOS `RunEvent::Opened` handler in `lib.rs`.
+#[tauri::command]
+pub fn get_startup_file(state: tauri::State<crate::StartupFile>) -> Option<String> {
+    state.0.lock().ok().and_then(|mut g| g.take())
+}
+
 /// Serialize `model` back to DBC format and write it to `path`.
 #[tauri::command]
 pub fn save_dbc(path: String, model: DbcModel) -> Result<(), String> {

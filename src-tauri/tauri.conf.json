@@ -32,6 +32,15 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["dbc"],
+        "name": "DBC File",
+        "description": "CAN database file",
+        "mimeType": "text/plain",
+        "role": "Editor"
+      }
     ]
   }
 }

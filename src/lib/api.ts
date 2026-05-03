@@ -39,6 +39,12 @@ export async function saveDbc(path: string, model: DbcModel): Promise<void> {
   return invoke<void>('save_dbc', { path, model });
 }
 
+/// Return the file path queued at startup (double-click / CLI arg), or null.
+/// Clears the stored path on the Rust side so it is only consumed once.
+export async function getStartupFile(): Promise<string | null> {
+  return invoke<string | null>('get_startup_file');
+}
+
 // ─── Model helpers ────────────────────────────────────────────────────────────
 
 export async function defaultMessage(
