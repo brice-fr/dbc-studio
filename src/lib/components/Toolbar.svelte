@@ -1,14 +1,44 @@
 <script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { dbcStore, isDirty, currentFilePath, markClean } from '../stores/dbc';
-  import { showToast, hexMode, showValidationPanel } from '../stores/ui';
-  import { pickOpenFile, pickSaveFile, openDbc, saveDbc } from '../api';
+  import { showToast, hexMode } from '../stores/ui';
+  import { pickOpenFile, pickSaveFile, openDbc, saveDbc,
+           getRecentFiles, addRecentFile, clearRecentFiles } from '../api';
   import { emptyModel, newMessage } from '../types';
 
   const dispatch = createEventDispatcher();
 
-  let saving = false;
+  let saving  = false;
   let opening = false;
+
+  // ── Recent files dropdown ──────────────────────────────────────────────────
+  let showRecent  = false;
+  let recentFiles: string[] = [];
+
+  async function toggleRecent() {
+    if (!showRecent) recentFiles = await getRecentFiles();
+    showRecent = !showRecent;
+  }
+
+  async function handleClearRecent() {
+    await clearRecentFiles();
+    recentFiles = [];
+    showRecent = false;
+  }
+
+  function basename(p: string) {
+    return p.split(/[\\/]/).pop() ?? p;
+  }
+
+  // ── Core open-path helper (shared by Open, Open Recent, file-association) ──
+  async function openPath(path: string) {
+    const { model, warnings } = await openDbc(path);
+    dbcStore.load(model);
+    markClean(path);
+    addRecentFile(path); // fire-and-forget
+    showToast('success', `Opened ${basename(path)}`);
+    for (const w of warnings) showToast('info', w, 6000);
+  }
 
   async function handleOpen() {
     if ($isDirty) {
@@ -19,13 +49,27 @@
     try {
       const path = await pickOpenFile();
       if (!path) return;
-      const { model, warnings } = await openDbc(path);
-      dbcStore.load(model);
-      markClean(path);
-      showToast('success', `Opened ${path.split('/').pop()}`);
-      for (const w of warnings) showToast('info', w, 6000);
+      await openPath(path);
     } catch (e) {
       showToast('error', String(e));
+    } finally {
+      opening = false;
+    }
+  }
+
+  async function handleOpenRecent(path: string) {
+    showRecent = false;
+    if ($isDirty) {
+      const ok = confirm('You have unsaved changes. Open a new file anyway?');
+      if (!ok) return;
+    }
+    opening = true;
+    try {
+      await openPath(path);
+    } catch (e) {
+      showToast('error', String(e));
+      // File may have been deleted — refresh the list
+      recentFiles = await getRecentFiles();
     } finally {
       opening = false;
     }
@@ -38,11 +82,11 @@
       if (!path) {
         path = await pickSaveFile('untitled.dbc');
         if (!path) return;
+        addRecentFile(path);
       }
       await saveDbc(path, $dbcStore);
       markClean(path);
       showToast('success', 'Saved');
-      // Auto-validate after every save
       dispatch('validate');
     } catch (e) {
       showToast('error', String(e));
@@ -58,7 +102,8 @@
       if (!path) return;
       await saveDbc(path, $dbcStore);
       markClean(path);
-      showToast('success', `Saved as ${path.split('/').pop()}`);
+      addRecentFile(path);
+      showToast('success', `Saved as ${basename(path)}`);
     } catch (e) {
       showToast('error', String(e));
     } finally {
@@ -77,7 +122,6 @@
   }
 
   function handleAddMessage() {
-    // Find a free CAN ID
     const used = new Set($dbcStore.messages.map((m) => m.id));
     let id = 0x100;
     while (used.has(id)) id++;
@@ -87,17 +131,23 @@
   function handleUndo() { dbcStore.undo(); }
   function handleRedo() { dbcStore.redo(); }
 
-  // Keyboard shortcuts
   function onKeydown(e: KeyboardEvent) {
+    if (e.key === 'Escape') { showRecent = false; return; }
     if ((e.metaKey || e.ctrlKey) && e.key === 'z' && !e.shiftKey) { e.preventDefault(); handleUndo(); }
     if ((e.metaKey || e.ctrlKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) { e.preventDefault(); handleRedo(); }
     if ((e.metaKey || e.ctrlKey) && e.key === 's' && !e.shiftKey) { e.preventDefault(); handleSave(); }
     if ((e.metaKey || e.ctrlKey) && e.key === 's' && e.shiftKey) { e.preventDefault(); handleSaveAs(); }
     if ((e.metaKey || e.ctrlKey) && e.key === 'o') { e.preventDefault(); handleOpen(); }
   }
+
+  function onWindowClick(e: MouseEvent) {
+    if (showRecent && !(e.target as Element)?.closest('.recent-wrap')) {
+      showRecent = false;
+    }
+  }
 </script>
 
-<svelte:window on:keydown={onKeydown} />
+<svelte:window on:keydown={onKeydown} on:click={onWindowClick} />
 
 <div class="toolbar">
   <!-- File group -->
@@ -108,6 +158,32 @@
     <button class="btn" on:click={handleOpen} disabled={opening} title="Open (Ctrl+O)">
       <span>📂</span> Open
     </button>
+    <!-- Recent files dropdown -->
+    <div class="recent-wrap">
+      <button class="btn recent-trigger" on:click={toggleRecent}
+        title="Open a recently opened file" aria-haspopup="true" aria-expanded={showRecent}>
+        Recent ▾
+      </button>
+      {#if showRecent}
+        <div class="recent-dropdown" role="menu">
+          {#if recentFiles.length === 0}
+            <div class="recent-empty">No recent files</div>
+          {:else}
+            {#each recentFiles as path (path)}
+              <button class="recent-item" role="menuitem"
+                title={path} on:click={() => handleOpenRecent(path)}>
+                <span class="recent-name">{basename(path)}</span>
+                <span class="recent-dir">{path.split(/[\\/]/).slice(0, -1).join('/')}</span>
+              </button>
+            {/each}
+            <div class="recent-separator"></div>
+            <button class="recent-clear" role="menuitem" on:click={handleClearRecent}>
+              Clear list
+            </button>
+          {/if}
+        </div>
+      {/if}
+    </div>
     <button class="btn" on:click={handleSave} disabled={saving} title="Save (Ctrl+S)">
       <span>💾</span> Save{$isDirty ? ' *' : ''}
     </button>
@@ -222,4 +298,74 @@
     max-width: 300px;
   }
   .muted { color: var(--text-muted); }
+
+  /* ── Recent files dropdown ─────────────────────────────────────────────── */
+  .recent-wrap { position: relative; }
+  .recent-trigger { font-size: 12px; }
+  .recent-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 200;
+    min-width: 280px;
+    max-width: 420px;
+    background: var(--bg-main);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12);
+    padding: 4px 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .recent-empty {
+    padding: 8px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+  }
+  .recent-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+    padding: 5px 14px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .recent-item:hover { background: var(--bg-hover); }
+  .recent-name {
+    font-size: 12px;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+  .recent-dir {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    direction: rtl; /* truncates from the left, keeping the deepest folder visible */
+  }
+  .recent-separator {
+    height: 1px;
+    background: var(--border-light);
+    margin: 4px 0;
+  }
+  .recent-clear {
+    padding: 5px 14px;
+    font-size: 11px;
+    color: var(--text-muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .recent-clear:hover { color: var(--text); background: var(--bg-hover); }
 </style>

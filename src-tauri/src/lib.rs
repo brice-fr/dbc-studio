@@ -32,6 +32,10 @@ pub fn run() {
             open_dbc,
             save_dbc,
             get_startup_file,
+            // Recent files
+            get_recent_files,
+            add_recent_file,
+            clear_recent_files,
             // Model helpers
             default_message,
             default_signal,

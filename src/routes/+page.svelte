@@ -9,7 +9,7 @@
   import ValidationPanel from '$lib/components/ValidationPanel.svelte';
   import { treePanelWidth, propertiesPanelWidth, showToast } from '$lib/stores/ui';
   import { dbcStore, isDirty, currentFilePath, markClean } from '$lib/stores/dbc';
-  import { openDbc, getStartupFile } from '$lib/api';
+  import { openDbc, getStartupFile, addRecentFile } from '$lib/api';
 
   let validationPanel: ValidationPanel;
   let unlistenOpenFile: (() => void) | undefined;
@@ -25,6 +25,7 @@
       const { model, warnings } = await openDbc(path);
       dbcStore.load(model);
       markClean(path);
+      addRecentFile(path); // fire-and-forget
       showToast('success', `Opened ${path.split('/').pop()}`);
       for (const w of warnings) showToast('info', w, 6000);
     } catch (e) {

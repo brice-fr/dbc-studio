@@ -45,6 +45,20 @@ export async function getStartupFile(): Promise<string | null> {
   return invoke<string | null>('get_startup_file');
 }
 
+// ─── Recent files ─────────────────────────────────────────────────────────────
+
+export async function getRecentFiles(): Promise<string[]> {
+  return invoke<string[]>('get_recent_files');
+}
+
+export async function addRecentFile(path: string): Promise<void> {
+  return invoke<void>('add_recent_file', { path });
+}
+
+export async function clearRecentFiles(): Promise<void> {
+  return invoke<void>('clear_recent_files');
+}
+
 // ─── Model helpers ────────────────────────────────────────────────────────────
 
 export async function defaultMessage(
