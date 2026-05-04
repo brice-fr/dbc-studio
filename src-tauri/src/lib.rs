@@ -1,6 +1,8 @@
 mod commands;
 mod dbc_model;
 mod dbc_sanitize;
+pub mod menu;
+pub mod recent;
 
 use commands::{file::*, model::*, validate::*};
 
@@ -27,6 +29,15 @@ pub fn run() {
         .manage(StartupFile(std::sync::Mutex::new(startup_path)))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // Build and apply the initial native menu.
+            let m = menu::build(app.handle())?;
+            app.set_menu(m)?;
+            Ok(())
+        })
+        .on_menu_event(|app, event| {
+            menu::handle_event(app, event.id().0.as_str());
+        })
         .invoke_handler(tauri::generate_handler![
             // File I/O
             open_dbc,
@@ -48,10 +59,7 @@ pub fn run() {
         .expect("error while running dbc-studio")
         .run(|app_handle, event| {
             // macOS: the OS sends RunEvent::Opened when the user double-clicks
-            // a .dbc file or uses "Open With".  This may arrive before the
-            // webview has finished loading, so we store the path in StartupFile
-            // state AND emit an event (for warm launches where the app is already
-            // running and the webview is ready).
+            // a .dbc file or uses "Open With".
             #[cfg(target_os = "macos")]
             if let RunEvent::Opened { urls } = event {
                 for url in urls {

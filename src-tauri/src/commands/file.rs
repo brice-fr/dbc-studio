@@ -4,7 +4,6 @@ use crate::dbc_model::{AttributeAssignmentModel, AttributeDefinitionModel, Attri
 use crate::dbc_sanitize;
 use serde::Serialize;
 use std::fs;
-use tauri::Manager;
 
 // ─── open_dbc ────────────────────────────────────────────────────────────────
 
@@ -68,51 +67,29 @@ pub fn get_startup_file(state: tauri::State<crate::StartupFile>) -> Option<Strin
 }
 
 // ─── Recent files ─────────────────────────────────────────────────────────────
-
-const MAX_RECENT: usize = 10;
-
-fn recent_files_path(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
-    app.path().app_config_dir().ok().map(|d| d.join("recent_files.json"))
-}
-
-fn load_recent(app: &tauri::AppHandle) -> Vec<String> {
-    let Some(path) = recent_files_path(app) else { return vec![] };
-    fs::read_to_string(&path)
-        .ok()
-        .and_then(|c| serde_json::from_str(&c).ok())
-        .unwrap_or_default()
-}
-
-fn persist_recent(app: &tauri::AppHandle, files: &[String]) {
-    let Some(path) = recent_files_path(app) else { return };
-    if let Some(parent) = path.parent() { let _ = fs::create_dir_all(parent); }
-    if let Ok(json) = serde_json::to_string(files) { let _ = fs::write(path, json); }
-}
+// Logic lives in crate::recent; commands here are thin wrappers that also
+// trigger a native-menu rebuild so the OS menu stays in sync.
 
 /// Return up to 10 recently opened paths (most-recent first).
 /// Entries whose file no longer exists on disk are silently removed.
 #[tauri::command]
 pub fn get_recent_files(app: tauri::AppHandle) -> Vec<String> {
-    load_recent(&app)
-        .into_iter()
-        .filter(|p| std::path::Path::new(p).exists())
-        .collect()
+    crate::recent::load_existing(&app)
 }
 
-/// Prepend `path` to the recent-files list, deduplicate, cap at 10.
+/// Prepend `path` to the recent-files list, deduplicate, cap at 10,
+/// then rebuild the native menu so the OS "Open Recent" submenu is current.
 #[tauri::command]
 pub fn add_recent_file(app: tauri::AppHandle, path: String) {
-    let mut recent = load_recent(&app);
-    recent.retain(|p| p != &path);
-    recent.insert(0, path);
-    recent.truncate(MAX_RECENT);
-    persist_recent(&app, &recent);
+    crate::recent::add(&app, &path);
+    crate::menu::rebuild(&app);
 }
 
-/// Wipe the entire recent-files list.
+/// Wipe the entire recent-files list and rebuild the native menu.
 #[tauri::command]
 pub fn clear_recent_files(app: tauri::AppHandle) {
-    persist_recent(&app, &[]);
+    crate::recent::clear(&app);
+    crate::menu::rebuild(&app);
 }
 
 /// Serialize `model` back to DBC format and write it to `path`.

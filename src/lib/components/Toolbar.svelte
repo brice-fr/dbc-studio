@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+  import { listen } from '@tauri-apps/api/event';
   import { dbcStore, isDirty, currentFilePath, markClean } from '../stores/dbc';
   import { showToast, hexMode } from '../stores/ui';
   import { pickOpenFile, pickSaveFile, openDbc, saveDbc,
@@ -145,6 +146,28 @@
       showRecent = false;
     }
   }
+
+  // ── Native OS menu actions ─────────────────────────────────────────────────
+  // The Rust menu event handler emits "menu-action" with a string token.
+  // We map each token to the handler that already exists in this component.
+  let unlistenMenu: (() => void) | undefined;
+
+  onMount(async () => {
+    unlistenMenu = await listen<string>('menu-action', ({ payload }) => {
+      if (payload === 'file-open')        { handleOpen(); return; }
+      if (payload === 'file-save')        { handleSave(); return; }
+      if (payload === 'file-save-as')     { handleSaveAs(); return; }
+      if (payload === 'edit-undo')        { handleUndo(); return; }
+      if (payload === 'edit-redo')        { handleRedo(); return; }
+      if (payload === 'edit-new-message') { handleAddMessage(); return; }
+      if (payload === 'recent-clear')     { handleClearRecent(); return; }
+      if (payload.startsWith('open-recent:')) {
+        handleOpenRecent(payload.slice('open-recent:'.length));
+      }
+    });
+  });
+
+  onDestroy(() => { unlistenMenu?.(); });
 </script>
 
 <svelte:window on:keydown={onKeydown} on:click={onWindowClick} />
