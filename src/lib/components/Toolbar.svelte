@@ -122,6 +122,16 @@
     isDirty.set(false);
   }
 
+  function handleClose() {
+    if ($isDirty) {
+      const ok = confirm('You have unsaved changes. Close without saving?');
+      if (!ok) return;
+    }
+    dbcStore.load(emptyModel());
+    currentFilePath.set(null);
+    isDirty.set(false);
+  }
+
   function handleAddMessage() {
     const used = new Set($dbcStore.messages.map((m) => m.id));
     let id = 0x100;
@@ -156,6 +166,7 @@
     unlistenMenu = await listen<string>('menu-action', ({ payload }) => {
       if (payload === 'file-new')         { handleNew(); return; }
       if (payload === 'file-open')        { handleOpen(); return; }
+      if (payload === 'file-close')       { handleClose(); return; }
       if (payload === 'file-save')        { handleSave(); return; }
       if (payload === 'file-save-as')     { handleSaveAs(); return; }
       if (payload === 'edit-undo')        { handleUndo(); return; }
@@ -213,6 +224,10 @@
     </button>
     <button class="btn" on:click={handleSaveAs} disabled={saving} title="Save As (Ctrl+Shift+S)">
       Save As
+    </button>
+    <button class="btn" on:click={handleClose} disabled={!$currentFilePath}
+      title="Close current file">
+      ✕ Close
     </button>
   </div>
 

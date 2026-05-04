@@ -47,6 +47,7 @@ pub fn handle_event(app: &AppHandle, id: &str) {
     let action: Option<String> = match id {
         "file-new"          => Some("file-new".into()),
         "file-open"         => Some("file-open".into()),
+        "file-close"        => Some("file-close".into()),
         "file-save"         => Some("file-save".into()),
         "file-save-as"      => Some("file-save-as".into()),
         "edit-undo"         => Some("edit-undo".into()),
@@ -91,6 +92,7 @@ fn build_file_menu(app: &AppHandle) -> tauri::Result<Submenu<tauri::Wry>> {
         &PredefinedMenuItem::separator(app)?,
         &MenuItem::with_id(app, "file-open",    "Open…",    true, Some("CmdOrCtrl+O"))?,
         &build_recent_submenu(app)?,
+        &MenuItem::with_id(app, "file-close",   "Close",    true, Some("CmdOrCtrl+W"))?,
         &PredefinedMenuItem::separator(app)?,
         &MenuItem::with_id(app, "file-save",    "Save",     true, Some("CmdOrCtrl+S"))?,
         &MenuItem::with_id(app, "file-save-as", "Save As…", true, Some("CmdOrCtrl+Shift+S"))?,
