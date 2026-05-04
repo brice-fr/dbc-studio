@@ -154,6 +154,7 @@
 
   onMount(async () => {
     unlistenMenu = await listen<string>('menu-action', ({ payload }) => {
+      if (payload === 'file-new')         { handleNew(); return; }
       if (payload === 'file-open')        { handleOpen(); return; }
       if (payload === 'file-save')        { handleSave(); return; }
       if (payload === 'file-save-as')     { handleSaveAs(); return; }

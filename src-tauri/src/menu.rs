@@ -45,6 +45,7 @@ pub fn rebuild(app: &AppHandle) {
 /// and emit it as a `"menu-action"` event.
 pub fn handle_event(app: &AppHandle, id: &str) {
     let action: Option<String> = match id {
+        "file-new"          => Some("file-new".into()),
         "file-open"         => Some("file-open".into()),
         "file-save"         => Some("file-save".into()),
         "file-save-as"      => Some("file-save-as".into()),
@@ -86,6 +87,8 @@ fn build_app_menu(app: &AppHandle) -> tauri::Result<Submenu<tauri::Wry>> {
 
 fn build_file_menu(app: &AppHandle) -> tauri::Result<Submenu<tauri::Wry>> {
     Submenu::with_items(app, "File", true, &[
+        &MenuItem::with_id(app, "file-new",     "New",      true, Some("CmdOrCtrl+N"))?,
+        &PredefinedMenuItem::separator(app)?,
         &MenuItem::with_id(app, "file-open",    "Open…",    true, Some("CmdOrCtrl+O"))?,
         &build_recent_submenu(app)?,
         &PredefinedMenuItem::separator(app)?,
